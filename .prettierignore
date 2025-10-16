@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+out/
+
+# Test results
+test-results/
+playwright-report/
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+
+# Documentation
+docs/
+*.md
+
+# Config files that should not be formatted
+playwright.config.ts
+tsconfig.json
+.eslintrc.json

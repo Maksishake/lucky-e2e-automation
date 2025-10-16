@@ -1,0 +1,68 @@
+{
+  "name": "lucky-e2e-automation",
+  "version": "1.0.0",
+  "description": "Playwright E2E Testing Framework for Lucky Casino - Enterprise Grade",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:smoke": "playwright test --project=smoke",
+    "test:auth": "playwright test --project=auth",
+    "test:auth-without-setup": "playwright test --project=auth-without-setup",
+    "test:firefox": "playwright test --project=firefox",
+    "test:ukraine": "playwright test --project=ukraine",
+    "test:ukraine-smoke": "playwright test --project=ukraine --grep smoke",
+    "test:all": "playwright test --project=default",
+    "test:list": "playwright test --list",
+    "test:install": "playwright install --with-deps",
+    "test:codegen": "playwright codegen",
+    "test:trace": "playwright show-trace",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\"",
+    "clean": "rm -rf test-results/ playwright-report/",
+    "clean:all": "rm -rf test-results/ playwright-report/ node_modules/ package-lock.json",
+    "dev": "playwright test --ui --project=smoke",
+    "ci": "playwright test --project=smoke --reporter=github",
+    "lint": "eslint src tests --ext .ts,.js",
+    "lint:fix": "eslint src tests --ext .ts,.js --fix",
+    "lint:ci": "eslint src tests --ext .ts,.js --max-warnings=0"
+  },
+  "keywords": [
+    "playwright",
+    "e2e",
+    "testing",
+    "automation",
+    "casino",
+    "atomic-design",
+    "page-object-model"
+  ],
+  "author": "Lucky Team - Senior Automation Engineer",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "dotenv": "^17.2.3",
+    "eslint": "^8.0.0",
+    "eslint-plugin-playwright": "^2.2.2",
+    "prettier": "^3.0.0",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucky-team/lucky-E2E-automation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lucky-team/lucky-E2E-automation/issues"
+  },
+  "homepage": "https://github.com/lucky-team/lucky-E2E-automation#readme"
+}
