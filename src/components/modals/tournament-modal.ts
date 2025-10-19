@@ -3,36 +3,40 @@
  */
 
 import { Locator, Page } from '@playwright/test';
-import { BaseModal } from '../../core/base.modal';
+import { BaseModal } from '@/core/abstract/base-modal';
+import { ILogger } from '@/core/interfaces/logger.interface';
 
 export class TournamentModalComponent extends BaseModal {
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'TournamentModal', '#modal-tournament', loggerInstance);
+  }
   
-  // Селекторы модального окна
-  get modalContainer(): Locator {
+  // Селекторы модального окна (переопределяем базовые)
+  override get modalContainer(): Locator {
     return this.page.locator('#modal-tournament');
   }
   
-  get modalContent(): Locator {
+  override get modalContent(): Locator {
     return this.page.locator('#modal-tournament .modal-content');
   }
   
-  get modalHeader(): Locator {
+  override get modalHeader(): Locator {
     return this.page.locator('#modal-tournament .modal-header');
   }
   
-  get modalTitle(): Locator {
+  override get modalTitle(): Locator {
     return this.page.locator('#modal-tournament .modal-title');
   }
   
-  get modalBody(): Locator {
+  override get modalBody(): Locator {
     return this.page.locator('#modal-tournament .modal-body');
   }
   
-  get modalFooter(): Locator {
+  override get modalFooter(): Locator {
     return this.page.locator('#modal-tournament .modal-footer');
   }
   
-  get closeButton(): Locator {
+  override get closeButton(): Locator {
     return this.page.locator('#modal-tournament .btn-close, #modal-tournament .close');
   }
   
@@ -91,17 +95,8 @@ export class TournamentModalComponent extends BaseModal {
   get prizeRows(): Locator {
     return this.page.locator('#modal-tournament .prize-row');
   }
-  
-  constructor(page: Page) {
-    super(page, 'TournamentModal');
-  }
 
-  /**
-   * Селектор модального окна
-   */
-  get modalSelector(): Locator {
-    return this.modalContainer;
-  }
+  // Удаляем переопределение modalSelector, используем базовое свойство
 
   /**
    * Открыть модальное окно турнира
@@ -368,9 +363,9 @@ export class TournamentModalComponent extends BaseModal {
    */
   async getModalInfo(): Promise<{
     isOpen: boolean;
-    tournamentInfo: any;
-    timerInfo: any;
-    prizesTable: Array<any>;
+    tournamentInfo: unknown;
+    timerInfo: unknown;
+    prizesTable: Array<unknown>;
     hasParticipateButton: boolean;
     hasCancelButton: boolean;
   }> {

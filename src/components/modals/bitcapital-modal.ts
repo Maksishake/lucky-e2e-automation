@@ -1,81 +1,85 @@
-import { Page, Locator } from '@playwright/test';
-import { BaseModal } from '../../core/base.modal';
+/**
+ * Bitcapital Modal Component - Компонент модального окна для работы с платежами
+ */
 
-export class BitcapitalModalComponent extends BaseModal {
-  constructor(page: Page) {
-    super(page, 'BitcapitalModal');
+import { Page, Locator } from '@playwright/test';
+import { BaseComponent } from '@/core/abstract/base-component';
+import { ILogger } from '@/core/interfaces/logger.interface';
+
+export class BitcapitalModalComponent extends BaseComponent {
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'BitcapitalModal', '.modal-bitcapital', loggerInstance);
   }
 
-  get modalSelector(): Locator {
-    return this.page.locator('#modal-bitcapital-offer');
+  // Селекторы для элементов модального окна
+  get depositButtonSelector(): Locator {
+    return this.page.locator('[data-testid="deposit-button"]');
+  }
+
+  get withdrawButtonSelector(): Locator {
+    return this.page.locator('[data-testid="withdraw-button"]');
+  }
+
+  get amountInputSelector(): Locator {
+    return this.page.locator('#amount');
+  }
+
+  get confirmDepositButtonSelector(): Locator {
+    return this.page.locator('[data-testid="confirm-deposit"]');
+  }
+
+  get confirmWithdrawButtonSelector(): Locator {
+    return this.page.locator('[data-testid="confirm-withdraw"]');
   }
 
   get closeButtonSelector(): Locator {
     return this.page.locator('.modal-close');
   }
 
-  get bitcapitalImageSelector(): Locator {
-    return this.page.locator('img[alt="Bitcapital"]');
+  // Методы для работы с модальным окном
+  async openDepositModal(): Promise<void> {
+    this.logStep('Opening deposit modal');
+    await this.depositButtonSelector.click();
+    await this.waitForVisible();
+    this.logSuccess('Deposit modal opened');
   }
 
-  get titleSelector(): Locator {
-    return this.page.locator('.text-white.text-center.body-bold');
+  async openWithdrawModal(): Promise<void> {
+    this.logStep('Opening withdraw modal');
+    await this.withdrawButtonSelector.click();
+    await this.waitForVisible();
+    this.logSuccess('Withdraw modal opened');
   }
 
-  get descriptionSelector(): Locator {
-    return this.page.locator('.text-white.text-center.body-sm');
+  async enterAmount(amount: string): Promise<void> {
+    this.logStep(`Entering amount: ${amount}`);
+    await this.amountInputSelector.fill(amount);
+    this.logSuccess('Amount entered');
   }
 
-  get loanButtonSelector(): Locator {
-    return this.page.locator('a[href*="bitcapital.top"]');
+  async confirmDeposit(): Promise<void> {
+    this.logStep('Confirming deposit');
+    await this.confirmDepositButtonSelector.click();
+    this.logSuccess('Deposit confirmed');
   }
 
-  get modalDialogSelector(): Locator {
-    return this.page.locator('.modal-dialog');
+  async confirmWithdraw(): Promise<void> {
+    this.logStep('Confirming withdraw');
+    await this.confirmWithdrawButtonSelector.click();
+    this.logSuccess('Withdraw confirmed');
   }
 
-  get modalContentSelector(): Locator {
-    return this.page.locator('.modal-content');
+  async closeModal(): Promise<void> {
+    this.logStep('Closing modal');
+    await this.closeButtonSelector.click();
+    this.logSuccess('Modal closed');
   }
 
-  get qrToggleSelector(): Locator {
-    return this.page.locator('#qrToggle');
-  }
-  /**
-   * Открыть модальное окно Bitcapital
-   */
-  async open(): Promise<void> {
-    this.logStep('Opening Bitcapital modal');
-    await this.waitForModalOpen();
-    this.logSuccess('Bitcapital modal opened');
-  }
-  
-  /**
-   * Закрыть модальное окно Bitcapital
-   */
-  async close(): Promise<void> {
-    this.logStep('Closing Bitcapital modal');
-    try {
-      if (await this.closeButtonSelector.first().isVisible() && await this.qrToggleSelector.isVisible()) {
-        await this.closeButtonSelector.first().click();
-        await this.closeQrCode();
-      }
-      else {
-        await this.closeByBackdrop();
-      }
-      await this.waitForModalClose();
-      this.logSuccess('Bitcapital modal closed');
-    } catch (error) {
-      this.logError('Error closing Bitcapital modal', error);
-    }
+  async isModalVisible(): Promise<boolean> {
+    return await this.isVisible();
   }
 
-  /**
-   * Закрыть QR код
-   */
-  async closeQrCode(): Promise<void> {
-    this.logStep('Closing QR code');
-    await this.qrToggleSelector.click();
-    this.logSuccess('QR code closed');
+  async waitForModalToClose(): Promise<void> {
+    await this.waitForHidden();
   }
 }

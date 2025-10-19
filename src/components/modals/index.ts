@@ -5,3 +5,4 @@
 export { AuthModalComponent } from './auth-modal';
 export { RegistrationModalComponent } from './registration-modal';
 export { BitcapitalModalComponent } from './bitcapital-modal';
+export { TournamentModalComponent } from './tournament-modal';

@@ -3,98 +3,67 @@
  */
 
 import { Page, Locator } from '@playwright/test';
-import { BaseAuthModal } from '../../core/base-auth-modal';
+import { BaseComponent } from '@/core/abstract/base-component';
+import { ILogger } from '@/core/interfaces/logger.interface';
 
-export class RegistrationModalComponent extends BaseAuthModal {
-  constructor(page: Page) {
-    super(page, 'RegistrationModal');
+export class RegistrationModalComponent extends BaseComponent {
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'RegistrationModal', '.modal-registration', loggerInstance);
   }
 
   // Специфичные селекторы для регистрации
-  get registrationTabSelector(): Locator {
-    return this.page.locator('[data-tab="tab-signup"]');
-  }
-
   get emailInputSelector(): Locator {
-    return this.page.locator('#email');
+    return this.page.locator('#email_registration');
   }
 
   get phoneInputSelector(): Locator {
-    return this.page.locator('#phone-signup');
+    return this.page.locator('#registration-phone');
   }
 
   get passwordInputSelector(): Locator {
-    return this.page.locator('#password-signup');
+    return this.page.locator('#password_registration');
   }
 
-  get promocodeInputSelector(): Locator {
-    return this.page.locator('#promocode');
+  get confirmPasswordInputSelector(): Locator {
+    return this.page.locator('#confirm_password_registration');
   }
 
-  get submitButtonSelector(): Locator {
-    return this.page.locator('#submit-btn');
+  get registrationButtonSelector(): Locator {
+    return this.page.locator('button[type="submit"]');
   }
 
-  /**
-   * Открыть модальное окно регистрации
-   */
-  async open(): Promise<void> {
+  get closeButtonSelector(): Locator {
+    return this.page.locator('.modal-close');
+  }
+
+  // Методы для работы с регистрацией
+  async openRegistrationModal(): Promise<void> {
     this.logStep('Opening registration modal');
-    
-    const registerButton = this.page.locator('button:has-text("Реєстрація")').first();
-    await registerButton.click();
-    await this.waitForModalOpen();
+    await this.waitForVisible();
     this.logSuccess('Registration modal opened');
   }
 
-  /**
-   * Закрыть модальное окно регистрации
-   */
-  async close(): Promise<void> {
-    this.logStep('Closing registration modal');
-    await this.closeByButton();
-    await this.waitForModalClose();
-    this.logSuccess('Registration modal closed');
+  async registerWithEmail(email: string, phone: string, password: string, confirmPassword: string): Promise<void> {
+    this.logStep('Registering with email');
+    await this.emailInputSelector.fill(email);
+    await this.phoneInputSelector.fill(phone);
+    await this.passwordInputSelector.fill(password);
+    await this.confirmPasswordInputSelector.fill(confirmPassword);
+    await this.registrationButtonSelector.click();
+    this.logSuccess('Registration with email completed');
   }
 
-  /**
-   * Переключиться на таб регистрации
-   */
-  async switchToRegistrationTab(): Promise<void> {
-    this.logStep('Switching to registration tab');
-    await this.registrationTabSelector.click();
-    await this.page.waitForSelector('#tab-signup.active');
-    this.logSuccess('Switched to registration tab');
+  async closeModal(): Promise<void> {
+    this.logStep('Closing modal');
+    await this.closeButtonSelector.click();
+    this.logSuccess('Modal closed');
   }
 
-
-  /**
-   * Заполнить промокод
-   */
-  async fillPromocode(promocode: string): Promise<void> {
-    this.logStep(`Filling promocode: ${promocode}`);
-    await this.promocodeInputSelector.fill(promocode);
-    this.logSuccess('Promocode filled');
+  async isModalVisible(): Promise<boolean> {
+    return await this.isVisible();
   }
 
-
-  /**
-   * Отправить форму регистрации
-   */
-  async submitRegistration(): Promise<void> {
-    this.logStep('Submitting registration form');
-    await this.submitButtonSelector.click();
-    await this.page.waitForSelector('#tab-inner-2', { timeout: 10000 });
-    this.logSuccess('Registration form submitted, SMS confirmation required');
-  }
-
-  /**
-   * Очистить форму регистрации
-   */
-  async clearRegistrationForm(): Promise<void> {
-    this.logStep('Clearing registration form');
-    await this.clearForm();
-    await this.promocodeInputSelector.fill('');
-    this.logSuccess('Registration form cleared');
+  async waitForModalToClose(): Promise<void> {
+    await this.waitForHidden();
   }
 }

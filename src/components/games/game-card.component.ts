@@ -1,306 +1,146 @@
 /**
- * Game Card Component - Компонент игровой карточки
+ * Game Card Component - Упрощенный компонент карточки игры
+ * Применяет принцип SRP - только работа с карточкой игры
  */
 
-import { Page } from '@playwright/test';
-import { BaseComponent } from '../../core/base.component';
-import { Game, GameAction, GameCardHoverState } from '../../types/game.types';
+import { Page, Locator } from '@playwright/test';
+import { BaseComponent } from '@/core/abstract/base-component';
+import { ILogger } from '@/core/interfaces/logger.interface';
+import { GameInfo, GameType, GameStatus } from '@/types/game.types';
+import { GameSelectors } from '@/core/selectors/GameSelectors';
+import { logger } from '@/core/logger';
 
 export class GameCardComponent extends BaseComponent {
-
-  constructor(page: Page) {
-    super(page, 'GameCard', '.game-card');
+  constructor(page: Page, rootElement: Locator, loggerInstance?: ILogger) {
+    super(page, 'GameCard', rootElement, loggerInstance || logger);
   }
 
-  // ============ ОСНОВНЫЕ ЭЛЕМЕНТЫ ============
-  get cardSelector() {
-    return this.page.locator('.game-card');
+  // ============ СЕЛЕКТОРЫ ============
+  
+  get titleLocator(): Locator {
+    return this.rootElement.locator(GameSelectors.GAME_TITLE);
   }
 
-  get cardImageSelector() {
-    return this.page.locator('.game-card img');
+  get providerLocator(): Locator {
+    return this.rootElement.locator(GameSelectors.GAME_PROVIDER);
   }
 
-  get cardHoverSelector() {
-    return this.page.locator('.game-card-hover');
+  get imageLocator(): Locator {
+    return this.rootElement.locator(GameSelectors.GAME_IMAGE);
   }
 
-  get cardTitleSelector() {
-    return this.page.locator('.game-card-hover .title');
+  get playButton(): Locator {
+    return this.rootElement.locator(GameSelectors.PLAY_BUTTON);
   }
 
-  get cardSubtitleSelector() {
-    return this.page.locator('.game-card-hover .subtitle');
+  get demoButton(): Locator {
+    return this.rootElement.locator(GameSelectors.DEMO_BUTTON);
   }
 
-  // ============ КНОПКИ ДЕЙСТВИЙ ============
-  get favoriteButtonSelector() {
-    return this.page.locator('button[wire\\:click="toggleFavorite"]');
+  get favoriteButton(): Locator {
+    return this.rootElement.locator(GameSelectors.FAVORITE_BUTTON);
   }
 
-  get realButtonSelector() {
-    return this.page.locator('button[wire\\:click="startGame(\\"real\\")"]');
-  }
-
-  get demoButtonSelector() {
-    return this.page.locator('button[wire\\:click="startGame(\\"demo\\")"]');
-  }
-
-  get buttonsContainerSelector() {
-    return this.page.locator('.game-card-hover .buttons');
-  }
   // ============ ОСНОВНЫЕ МЕТОДЫ ============
-  /**
-   * Проверить, видна ли карточка
-   */
-  async isCardVisible(): Promise<boolean> {
-    return await this.isVisible();
+
+  async getGameInfo(): Promise<GameInfo> {
+    this.logStep('Getting game info from card');
+    
+    const title = await this.titleLocator.textContent() || '';
+    const provider = await this.providerLocator.textContent() || '';
+    const image = await this.imageLocator.getAttribute('src') || '';
+    const hasPlayButton = await this.playButton.isVisible();
+    const hasDemoButton = await this.demoButton.isVisible();
+
+    this.logSuccess(`Game info retrieved: ${title}`);
+    return {
+      index: -1, // Index будет установлен извне
+      title: title.trim(),
+      provider: provider.trim(),
+      image,
+      hasPlayButton,
+      hasDemoButton,
+      locator: this.rootElement,
+      type: GameType.SLOT,
+      status: GameStatus.LOADED
+    };
   }
 
-  /**
-   * Навести курсор на карточку
-   */
+  async clickCard(): Promise<void> {
+    this.logStep(`Clicking game card: ${await this.titleLocator.textContent()}`);
+    await this.rootElement.click();
+    this.logSuccess('Game card clicked');
+  }
+
+  async clickPlayButton(): Promise<void> {
+    this.logStep(`Clicking play button for game: ${await this.titleLocator.textContent()}`);
+    await this.playButton.click();
+    this.logSuccess('Play button clicked');
+  }
+
+  async clickDemoButton(): Promise<void> {
+    this.logStep(`Clicking demo button for game: ${await this.titleLocator.textContent()}`);
+    await this.demoButton.click();
+    this.logSuccess('Demo button clicked');
+  }
+
+  async clickFavoriteButton(): Promise<void> {
+    this.logStep(`Toggling favorite for game: ${await this.titleLocator.textContent()}`);
+    await this.favoriteButton.click();
+    this.logSuccess('Favorite button toggled');
+  }
+
+  // ============ ПРОВЕРКИ СОСТОЯНИЯ ============
+
+  async isPlayButtonVisible(): Promise<boolean> {
+    return await this.playButton.isVisible();
+  }
+
+  async isDemoButtonVisible(): Promise<boolean> {
+    return await this.demoButton.isVisible();
+  }
+
+  async isFavoriteButtonActive(): Promise<boolean> {
+    try {
+      const element = await this.favoriteButton.elementHandle();
+      if (element) {
+        const classList = await element.evaluate(el => Array.from(el.classList));
+        return classList.includes('active') || classList.includes('favorited');
+      }
+      return false;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async isCardVisible(): Promise<boolean> {
+    return await this.rootElement.isVisible();
+  }
+
+  // ============ ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ============
+
   async hoverCard(): Promise<void> {
     this.logStep('Hovering over game card');
-    await this.cardSelector.hover();
-    await this.page.waitForTimeout(300);
-    this.logSuccess('Hovered over game card');
+    await this.rootElement.hover();
+    this.logSuccess('Game card hovered');
   }
 
-  /**
-   * Убрать курсор с карточки
-   */
-  async unhoverCard(): Promise<void> {
-    this.logStep('Unhovering game card');
-    await this.page.hover('body');
-    await this.page.waitForTimeout(300);
-    this.logSuccess('Unhovered game card');
+  async getCardTitle(): Promise<string> {
+    return await this.titleLocator.textContent() || '';
   }
 
-  // ============ ИНФОРМАЦИЯ ОБ ИГРЕ ============
-  /**
-   * Получить название игры
-   */
-  async getGameTitle(): Promise<string> {
-    const title = this.cardTitleSelector;
-    return await title.textContent() || '';
+  async getCardProvider(): Promise<string> {
+    return await this.providerLocator.textContent() || '';
   }
 
-  /**
-   * Получить провайдера игры
-   */
-  async getGameProvider(): Promise<string> {
-    const subtitle = this.cardSubtitleSelector;
-    return await subtitle.textContent() || '';
+  async getCardImage(): Promise<string> {
+    return await this.imageLocator.getAttribute('src') || '';
   }
 
-  /**
-   * Получить URL изображения игры
-   */
-  async getGameImageUrl(): Promise<string> {
-    const image = this.cardImageSelector;
-    return await image.getAttribute('src') || '';
-  }
-
-  /**
-   * Получить информацию об игре
-   */
-  async getGameInfo(): Promise<Game> {
-    const title = await this.getGameTitle();
-    const provider = await this.getGameProvider();
-    const imageUrl = await this.getGameImageUrl();
-    const isFavorite = await this.isFavorite();
-    const hasDemo = await this.hasDemoButton();
-    const hasReal = await this.hasRealButton();
-
-    return {
-      id: `game-${title.toLowerCase().replace(/\s+/g, '-')}`,
-      title,
-      provider,
-      imageUrl,
-      isFavorite,
-      hasDemo,
-      hasReal,
-      category: '',
-      gameUrl: '',
-      demoUrl: ''
-    };
-  }
-
-  // ============ ВЗАИМОДЕЙСТВИЕ С КАРТОЧКОЙ ============
-  /**
-   * Кликнуть по карточке игры
-   */
-  async clickCard(): Promise<void> {
-    this.logStep('Clicking game card');
-    await this.cardSelector.click();
-    this.logSuccess('Clicked game card');
-  }
-
-  /**
-   * Кликнуть по изображению игры
-   */
-  async clickGameImage(): Promise<void> {
-    this.logStep('Clicking game image');
-    await this.cardImageSelector.click();
-    this.logSuccess('Clicked game image');
-  }
-
-  // ============ ИЗБРАННОЕ ============
-  /**
-   * Переключить избранное
-   */
-  async toggleFavorite(): Promise<void> {
-    this.logStep('Toggling favorite');
-    await this.favoriteButtonSelector.click();
-    await this.page.waitForTimeout(500);
-    this.logSuccess('Toggled favorite');
-  }
-
-  /**
-   * Проверить, добавлена ли игра в избранное
-   */
-  async isFavorite(): Promise<boolean> {
-    const favoriteButton = this.favoriteButtonSelector;
-    const classes = await favoriteButton.getAttribute('class');
-    return classes?.includes('bg-orange') || false;
-  }
-
-  // ============ ЗАПУСК ИГР ============
-  /**
-   * Запустить игру в реальном режиме
-   */
-  async startRealGame(): Promise<void> {
-    this.logStep('Starting real game');
-    await this.realButtonSelector.click();
-    await this.page.waitForTimeout(1000);
-    this.logSuccess('Started real game');
-  }
-
-  /**
-   * Запустить игру в демо режиме
-   */
-  async startDemoGame(): Promise<void> {
-    this.logStep('Starting demo game');
-    await this.demoButtonSelector.click();
-    await this.page.waitForTimeout(1000);
-    this.logSuccess('Started demo game');
-  }
-
-  /**
-   * Запустить игру с указанным действием
-   */
-  async startGame(action: GameAction): Promise<void> {
-    if (action === 'real') {
-      await this.startRealGame();
-    } else if (action === 'demo') {
-      await this.startDemoGame();
-    }
-  }
-
-  // ============ ПРОВЕРКИ КНОПОК ============
-  /**
-   * Проверить, есть ли кнопка "Реальный"
-   */
-  async hasRealButton(): Promise<boolean> {
-    const realButton = this.realButtonSelector;
-    return await realButton.isVisible();
-  }
-
-  /**
-   * Проверить, есть ли кнопка "Демо"
-   */
-  async hasDemoButton(): Promise<boolean> {
-    const demoButton = this.demoButtonSelector;
-    return await demoButton.isVisible();
-  }
-
-  /**
-   * Проверить, видна ли область с кнопками
-   */
-  async isButtonsContainerVisible(): Promise<boolean> {
-    const buttonsContainer = this.buttonsContainerSelector;
-    return await buttonsContainer.isVisible();
-  }
-
-  /**
-   * Проверить, видна ли область при наведении
-   */
-  async isHoverAreaVisible(): Promise<boolean> {
-    const hoverArea = this.cardHoverSelector;
-    return await hoverArea.isVisible();
-  }
-
-  /**
-   * Получить состояние наведения
-   */
-  async getHoverState(): Promise<GameCardHoverState> {
-    const isHovered = await this.isHoverAreaVisible();
-    const showButtons = await this.isButtonsContainerVisible();
-    const showFavorite = await this.favoriteButtonSelector.isVisible();
-
-    return {
-      isHovered,
-      showButtons,
-      showFavorite
-    };
-  }
-
-  // ============ ЗАГРУЗКА И СОСТОЯНИЕ ============
-  /**
-   * Дождаться загрузки карточки
-   */
-  async waitForCardLoad(): Promise<void> {
+  async waitForCardToLoad(): Promise<void> {
     this.logStep('Waiting for game card to load');
-    await this.cardSelector.waitFor({ state: 'visible' });
-    await this.cardImageSelector.waitFor({ state: 'visible' });
+    await this.rootElement.waitFor({ state: 'visible' });
+    await this.titleLocator.waitFor({ state: 'visible' });
     this.logSuccess('Game card loaded');
-  }
-
-  /**
-   * Проверить, загружено ли изображение
-   */
-  async isImageLoaded(): Promise<boolean> {
-    const image = this.cardImageSelector;
-    const isVisible = await image.isVisible();
-    const src = await image.getAttribute('src');
-    return isVisible && !!src;
-  }
-
-  /**
-   * Получить все доступные действия для игры
-   */
-  async getAvailableActions(): Promise<GameAction[]> {
-    const actions: GameAction[] = [];
-    
-    if (await this.hasRealButton()) {
-      actions.push('real');
-    }
-    
-    if (await this.hasDemoButton()) {
-      actions.push('demo');
-    }
-    
-    actions.push('favorite');
-    
-    return actions;
-  }
-
-  /**
-   * Проверить, активна ли карточка
-   */
-  async isCardActive(): Promise<boolean> {
-    const card = this.cardSelector;
-    const classes = await card.getAttribute('class');
-    return classes?.includes('active') || false;
-  }
-
-  /**
-   * Получить CSS классы карточки
-   */
-  async getCardClasses(): Promise<string[]> {
-    const card = this.cardSelector;
-    const classString = await card.getAttribute('class') || '';
-    return classString.split(' ').filter(cls => cls.length > 0);
   }
 }

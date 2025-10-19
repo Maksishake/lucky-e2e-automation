@@ -1,16 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { logger } from '@/core/logger';
-import { GameService } from '@/services/game/game.service';
-import { Routes } from '@config/routes';
+import { GameServiceFactory } from '@/core/factories/GameServiceFactory';
+import { Routes } from '@/config/routes';
+import { IGameOrchestrator } from '@/core/interfaces/IGame.interface';
+import { GameTestResult, GameStabilityResult, GameErrorType } from '@/types/game.types';
+
 
 test.describe('Финальная проверка стабильности игр (15 секунд)', () => {
-  let gameService: GameService;
+  let gameService: IGameOrchestrator;
   let page: any;
   
   test.beforeEach(async ({ page: testPage }) => {
     logger.testStart('Final Game Stability 15s Tests', 'game-stability-15s-final.spec.ts');
     page = testPage;
-    gameService = new GameService(page);
+    gameService = GameServiceFactory.createGameOrchestrator(page);
     
     // Переходим на главную страницу (авторизация уже выполнена в globalSetup)
     await page.goto(Routes.HOME);
@@ -20,90 +23,100 @@ test.describe('Финальная проверка стабильности иг
   });
   
   /**
-   * Универсальная функция для тестирования игры с обработкой ошибок
+   * Универсальная функция для тестирования игры с детальной обработкой ошибок
    */
   async function testGameStability(gameTitle: string, providerName: string): Promise<void> {
+    const testName = `${gameTitle} (${providerName})`;
+    logger.info(testName, 'Starting stability test for 15 seconds');
+    
     try {
-      // Используем универсальный метод для тестирования игры
-      const result = await gameService.testGameUniversal(gameTitle, providerName);
+      // Шаг 1: Тестируем открытие игры
+      logger.info(testName, 'Step 1: Testing game opening');
+      const result: GameTestResult = await gameService.testGameUniversal(gameTitle, providerName);
       
-      if (result.success) {
-        // Если игра открылась успешно, проверяем стабильность
-        const stabilityResult = await gameService.testGameStabilityUniversal(gameTitle, 15);
-        
-        if (stabilityResult.isStable) {
-          logger.assertion(`${gameTitle} stability check (15s)`, true, true, true);
-          expect(stabilityResult.isStable).toBe(true);
-        } else {
-          logger.assertion(`${gameTitle} stability check (15s)`, true, false, false);
-          throw new Error(`Game is not stable: ${stabilityResult.failureReason}`);
-        }
-      } else {
-        // Обрабатываем различные типы ошибок
-        handleGameError(gameTitle, result.errorType, result.errorDetails);
+      if (!result.success) {
+        // Игра не открылась - обрабатываем ошибку
+        logger.error(testName, `Game opening failed: ${result.errorType} - ${result.errorDetails}`);
+        handleGameOpeningError(testName, result);
+        return;
       }
+      
+      logger.info(testName, 'Step 1: Game opened successfully');
+      
+      // Шаг 2: Тестируем стабильность игры
+      logger.info(testName, 'Step 2: Testing game stability for 15 seconds');
+      const stabilityResult: GameStabilityResult = await gameService.testGameStabilityUniversal(gameTitle, 15);
+      
+      if (stabilityResult.isStable) {
+        // Игра стабильна
+        logger.info(testName, `Step 2: Game remained stable for ${stabilityResult.duration} seconds`);
+        logger.assertion(`${testName} stability check (15s)`, true, true, true);
+        expect(stabilityResult.isStable).toBe(true);
+      } else {
+        // Игра нестабильна
+        logger.error(testName, `Step 2: Game became unstable: ${stabilityResult.failureReason}`);
+        logger.assertion(`${testName} stability check (15s)`, true, false, false);
+        
+        // FAIL тест с детальным описанием ошибки
+        throw new Error(`Game stability test FAILED: ${stabilityResult.failureReason}`);
+      }
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`${gameTitle} test failed`, errorMessage);
+      logger.error(testName, `Test execution failed: ${errorMessage}`);
       
-      // Обрабатываем ошибки стабильности
-      handleStabilityError(gameTitle, errorMessage);
+      // FAIL тест с детальным описанием ошибки
+      throw new Error(`Game stability test FAILED: ${errorMessage}`);
     }
   }
 
   /**
-   * Обработка ошибок игры
+   * Обработка ошибок открытия игры
    */
-  function handleGameError(gameTitle: string, errorType?: string, errorDetails?: string): void {
+  function handleGameOpeningError(testName: string, result: GameTestResult): void {
+    const errorType = result.errorType || 'UNKNOWN_ERROR';
+    const errorDetails = result.errorDetails || 'No details provided';
+    
     switch (errorType) {
-      case 'CURRENCY_RESTRICTION':
-        logger.info(gameTitle, 'Currency restriction detected - test passed with restriction message');
+      case GameErrorType.CURRENCY_RESTRICTION:
+        logger.info(testName, `Currency restriction detected - test PASSED with restriction message: ${errorDetails}`);
         expect(true).toBe(true);
         break;
-      case 'BROWSER_BLOCKING':
-        logger.info(gameTitle, 'Browser blocking detected - test passed with blocking message');
+        
+      case GameErrorType.BROWSER_BLOCKING:
+        logger.info(testName, `Browser blocking detected - test PASSED with blocking message: ${errorDetails}`);
         expect(true).toBe(true);
         break;
-      case 'SERVER_ERROR':
-        logger.info(gameTitle, 'Server error detected - test passed with server error message');
+        
+      case GameErrorType.SERVER_ERROR:
+        logger.info(testName, `Server error detected - test PASSED with server error message: ${errorDetails}`);
         expect(true).toBe(true);
         break;
-      case 'IP_BLOCKED':
-        logger.info(gameTitle, 'IP blocking detected - test passed with IP blocking message');
+        
+      case GameErrorType.IP_BLOCKED:
+        logger.info(testName, `IP blocking detected - test PASSED with IP blocking message: ${errorDetails}`);
         expect(true).toBe(true);
         break;
+        
+      case GameErrorType.GAME_NOT_FOUND:
+        logger.error(testName, `Game not found - test FAILED: ${errorDetails}`);
+        throw new Error(`Game not found: ${errorDetails}`);
+        
+      case GameErrorType.URL_MISMATCH:
+        logger.error(testName, `URL mismatch - test FAILED: ${errorDetails}`);
+        throw new Error(`URL mismatch: ${errorDetails}`);
+        
+      case GameErrorType.IFRAME_ERROR:
+        logger.error(testName, `Iframe error - test FAILED: ${errorDetails}`);
+        throw new Error(`Iframe error: ${errorDetails}`);
+        
+      case GameErrorType.STABILITY_ERROR:
+        logger.error(testName, `Stability error - test FAILED: ${errorDetails}`);
+        throw new Error(`Stability error: ${errorDetails}`);
+        
       default:
+        logger.error(testName, `Unknown error type: ${errorType} - test FAILED: ${errorDetails}`);
         throw new Error(`Unknown error type: ${errorType} - ${errorDetails}`);
-    }
-  }
-
-  /**
-   * Обработка ошибок стабильности
-   */
-  function handleStabilityError(gameTitle: string, errorMessage: string): void {
-    if (errorMessage.includes('Game elements disappeared')) {
-      logger.info(gameTitle, 'Game elements disappeared - test passed with stability message');
-      expect(true).toBe(true);
-    } else if (errorMessage.includes('Game is not stable')) {
-      logger.info(gameTitle, 'Game stability issue detected - test passed with stability message');
-      expect(true).toBe(true);
-    } else if (errorMessage.includes('Game stability error')) {
-      logger.info(gameTitle, 'Game stability error detected - test passed with stability message');
-      expect(true).toBe(true);
-    } else if (errorMessage.includes('Game canvas disappeared')) {
-      logger.info(gameTitle, 'Game canvas disappeared - test passed with stability message');
-      expect(true).toBe(true);
-    } else if (errorMessage.includes('Game iframe disappeared')) {
-      logger.info(gameTitle, 'Game iframe disappeared - test passed with stability message');
-      expect(true).toBe(true);
-    } else if (errorMessage.includes('Game URL changed')) {
-      logger.info(gameTitle, 'Game URL changed - test passed with stability message');
-      expect(true).toBe(true);
-    } else if (errorMessage.includes('Game redirected to home page')) {
-      logger.info(gameTitle, 'Game redirected to home page - test passed with stability message');
-      expect(true).toBe(true);
-    } else {
-      throw new Error(`Unhandled stability error: ${errorMessage}`);
     }
   }
   
@@ -132,7 +145,6 @@ test.describe('Финальная проверка стабильности иг
       await testGameStability('Lucky Chess Mate', 'Apollo Games');
     });
   });
-
 
   // AvatarUX
   test.describe('AvatarUX', () => {
@@ -195,13 +207,13 @@ test.describe('Финальная проверка стабильности иг
 
   // Endorphina
   test.describe('Endorphina', () => {
-    test('Проверка стабильности игры Cyber Wolf (15 секунд)', async () => {
+    test('Endorphina игра Cyber Wolf (15 секунд)', async () => {
       await testGameStability('Cyber Wolf', 'Endorphina');
     });
-    test('Проверка стабильности игры In Jazz (15 секунд)', async () => {
+    test('Endorphina игра In Jazz (15 секунд)', async () => {
       await testGameStability('In Jazz', 'Endorphina');
     });
-    test('Проверка стабильности игры Book of Conquistador (15 секунд)', async () => {
+    test('Endorphina игра Book of Conquistador (15 секунд)', async () => {
       await testGameStability('Book of Conquistador', 'Endorphina');
     });
   });

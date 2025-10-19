@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 import { UserService } from '@/services/user/user.service';
 import { BitcapitalModalComponent } from '@/components/modals/bitcapital-modal';
-import { Environment } from '@config/envirement';
+import { Environment } from '@/config/envirement';
 import { logger } from '@/core/logger';
 import * as fs from 'fs';
 import * as path from 'path';

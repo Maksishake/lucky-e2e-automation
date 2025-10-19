@@ -3,10 +3,16 @@
  */
 
 import { Page, Locator } from '@playwright/test';
-import { BaseComponent } from '../core/base.component';
-import { BannerSlide, SliderState } from '../types/game.types';
+import { BaseComponent } from '@/core/abstract/base-component';
+import { BannerSlide, SliderState } from '@/types/game.types';
+import { ILogger } from '@/core/interfaces/logger.interface';
+import { logger } from '@/core/logger';
 
 export class BannerSliderComponent extends BaseComponent {
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'BannerSlider', '.banner-slider', loggerInstance || logger);
+  }
+
   // Селекторы для элементов слайдера
   get sliderContainer(): Locator {
     return this.page.locator('.banner-slider');
@@ -48,9 +54,6 @@ export class BannerSliderComponent extends BaseComponent {
     return this.page.locator('.banner a');
   }
 
-  constructor(page: Page) {
-    super(page, 'BannerSlider');
-  }
 
   /**
    * Проверить, виден ли слайдер

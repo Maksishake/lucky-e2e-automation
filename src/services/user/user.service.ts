@@ -3,140 +3,180 @@
  */
 
 import { Page } from '@playwright/test';
-import { BaseService } from '../../core/base.service';
+import { BaseService } from '../../core/abstract/base-service';
 import { AuthModalComponent } from '../../components/modals/auth-modal';
 import { RegistrationModalComponent } from '../../components/modals/registration-modal';
-import { Routes } from '@config/routes';
+// import { Routes } from '@config/routes';
 import { HeaderComponent } from '@/components/header.component';
 import { BitcapitalModalComponent } from '@/components/modals/bitcapital-modal';
+import { ILogger } from '@/core/interfaces/logger.interface';
+import { logger } from '@/core/logger';
 
 export class UserService extends BaseService {
   private readonly authModal: AuthModalComponent;
   private readonly registrationModal: RegistrationModalComponent;
   private readonly headerComponent: HeaderComponent;
   private readonly bitcapitalModalComponent: BitcapitalModalComponent;
-  constructor(page: Page) {
-    super(page, 'UserService');
-    this.authModal = new AuthModalComponent(this.page);
-    this.registrationModal = new RegistrationModalComponent(this.page);
-    this.headerComponent = new HeaderComponent(this.page);
-    this.bitcapitalModalComponent = new BitcapitalModalComponent(this.page);
+  
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'UserService', loggerInstance || logger);
+    this.authModal = new AuthModalComponent(page, loggerInstance);
+    this.registrationModal = new RegistrationModalComponent(page, loggerInstance);
+    this.headerComponent = new HeaderComponent(page, loggerInstance);
+    this.bitcapitalModalComponent = new BitcapitalModalComponent(page, loggerInstance);
   }
 
   // ============ АВТОРИЗАЦИЯ ============
   /**
    * Авторизация через email
    */
-  async authWithEmail(email: string, password: string): Promise<void> {
-    this.logStep('Starting email authentication');
-    await this.navigateTo(Routes.HOME);
-    await this.headerComponent.openLoginModal();
-    await this.authModal.switchToEmailMethod();
-    await this.authModal.fillEmail(email);
-    await this.authModal.fillPassword(password);
-    await this.authModal.submitLogin();
-    await this.bitcapitalModalComponent.close();
-    await this.headerComponent.isUserAuthenticated(); 
-    this.logSuccess('Email authentication completed');
+  async loginWithEmail(email: string, password: string): Promise<void> {
+    this.logStep(`Logging in with email: ${email}`);
+    
+    try {
+      await this.authModal.openLoginModal();
+      await this.authModal.loginWithEmail(email, password);
+      await this.authModal.waitForModalToClose();
+      
+      this.logSuccess('Login with email completed');
+    } catch (error) {
+      this.logError(`Failed to login with email: ${error}`);
+      throw error;
+    }
   }
 
   /**
    * Авторизация через телефон
    */
-  async authWithPhone(phone: string, password: string): Promise<void> {
-    this.logStep('Starting phone authentication');
-    await this.navigateTo(Routes.HOME);
-    await this.headerComponent.openLoginModal();
-    await this.authModal.switchToPhoneMethod();
-    await this.authModal.fillPhone(phone);
-    await this.authModal.fillPassword(password);
-    await this.authModal.submitLogin();
-    this.logSuccess('Phone authentication completed');
-  }
-
-  // ============ РЕГИСТРАЦИЯ ============
-  /**
-   * Регистрация через email
-   */
-  async registerWithEmail(email: string, password: string, currency: string = 'UAH'): Promise<void> {
-    this.logStep('Starting email registration');
-    await this.registrationModal.open();
-    await this.registrationModal.switchToEmailMethod();
-    await this.registrationModal.fillEmail(email);
-    await this.registrationModal.fillPassword(password);
-    await this.registrationModal.selectCurrency(currency);
-    await this.registrationModal.acceptTerms();
-    await this.registrationModal.submitRegistration();
-
-    await this.bitcapitalModalComponent.close();
-    await this.headerComponent.isUserAuthenticated(); 
-    this.logSuccess('Email registration completed');
+  async loginWithPhone(phone: string, password: string): Promise<void> {
+    this.logStep(`Logging in with phone: ${phone}`);
+    
+    try {
+      await this.authModal.openLoginModal();
+      await this.authModal.loginWithPhone(phone, password);
+      await this.authModal.waitForModalToClose();
+      
+      this.logSuccess('Login with phone completed');
+    } catch (error) {
+      this.logError(`Failed to login with phone: ${error}`);
+      throw error;
+    }
   }
 
   /**
-   * Регистрация через телефон
+   * Регистрация нового пользователя
    */
-  async registerWithPhone(phone: string, password: string, currency: string = 'UAH'): Promise<void> {
-    this.logStep('Starting phone registration');
-    await this.registrationModal.open();
-    await this.registrationModal.switchToPhoneMethod();
-    await this.registrationModal.fillPhone(phone);
-    await this.registrationModal.fillPassword(password);
-    await this.registrationModal.selectCurrency(currency);
-    await this.registrationModal.acceptTerms();
-    await this.registrationModal.submitRegistration();
-    await this.bitcapitalModalComponent.close();
-    await this.headerComponent.isUserAuthenticated(); 
-    this.logSuccess('Phone registration completed');
-  }
-
-  // ============ УТИЛИТЫ ============
-  /**
-   * Проверить, авторизован ли пользователь
-   */
-  async isAuthenticated(): Promise<boolean> {
-    return await this.headerComponent.isUserAuthenticated();
+  async registerUser(email: string, phone: string, password: string, confirmPassword: string): Promise<void> {
+    this.logStep(`Registering new user: ${email}`);
+    
+    try {
+      await this.registrationModal.openRegistrationModal();
+      await this.registrationModal.registerWithEmail(email, phone, password, confirmPassword);
+      await this.registrationModal.waitForModalToClose();
+      
+      this.logSuccess('User registration completed');
+    } catch (error) {
+      this.logError(`Failed to register user: ${error}`);
+      throw error;
+    }
   }
 
   /**
-   * Закрыть модальное окно авторизации
+   * Выход из системы
    */
-  async closeAuthModal(): Promise<void> {
-    await this.authModal.close();
+  async logout(): Promise<void> {
+    this.logStep('Logging out');
+    
+    try {
+      await this.headerComponent.clickLogoutButton();
+      this.logSuccess('Logout completed');
+    } catch (error) {
+      this.logError(`Failed to logout: ${error}`);
+      throw error;
+    }
   }
 
   /**
-   * Закрыть модальное окно регистрации
+   * Проверка авторизации
    */
-  async closeRegistrationModal(): Promise<void> {
-    await this.registrationModal.close();
+  async isLoggedIn(): Promise<boolean> {
+    this.logStep('Checking if user is logged in');
+    
+    try {
+      const isLoggedIn = await this.headerComponent.isUserLoggedIn();
+      this.logStep(`User logged in status: ${isLoggedIn}`);
+      return isLoggedIn;
+    } catch (error) {
+      this.logError(`Failed to check login status: ${error}`);
+      return false;
+    }
   }
 
   /**
-   * Получить текущий метод авторизации
+   * Получение информации о пользователе
    */
-  async getCurrentAuthMethod(): Promise<'email' | 'phone'> {
-    return await this.authModal.getCurrentMethod();
+  async getUserInfo(): Promise<{ email?: string; phone?: string; balance?: string }> {
+    this.logStep('Getting user information');
+    
+    try {
+      const userInfo = await this.headerComponent.getUserInfo();
+      this.logSuccess('User information retrieved');
+      return userInfo;
+    } catch (error) {
+      this.logError(`Failed to get user info: ${error}`);
+      return {};
+    }
   }
 
   /**
-   * Получить текущий метод регистрации
+   * Пополнение счета
    */
-  async getCurrentRegistrationMethod(): Promise<'email' | 'phone'> {
-    return await this.registrationModal.getCurrentMethod();
+  async deposit(amount: string): Promise<void> {
+    this.logStep(`Depositing amount: ${amount}`);
+    
+    try {
+      await this.bitcapitalModalComponent.openDepositModal();
+      await this.bitcapitalModalComponent.enterAmount(amount);
+      await this.bitcapitalModalComponent.confirmDeposit();
+      
+      this.logSuccess('Deposit completed');
+    } catch (error) {
+      this.logError(`Failed to deposit: ${error}`);
+      throw error;
+    }
   }
 
   /**
-   * Проверить, открыто ли модальное окно авторизации
+   * Вывод средств
    */
-  async isAuthModalOpen(): Promise<boolean> {
-    return await this.authModal.isOpen();
+  async withdraw(amount: string): Promise<void> {
+    this.logStep(`Withdrawing amount: ${amount}`);
+    
+    try {
+      await this.bitcapitalModalComponent.openWithdrawModal();
+      await this.bitcapitalModalComponent.enterAmount(amount);
+      await this.bitcapitalModalComponent.confirmWithdraw();
+      
+      this.logSuccess('Withdrawal completed');
+    } catch (error) {
+      this.logError(`Failed to withdraw: ${error}`);
+      throw error;
+    }
   }
 
   /**
-   * Проверить, открыто ли модальное окно регистрации
+   * Проверка баланса
    */
-  async isRegistrationModalOpen(): Promise<boolean> {
-    return await this.registrationModal.isOpen();
+  async getBalance(): Promise<string> {
+    this.logStep('Getting user balance');
+    
+    try {
+      const balance = await this.headerComponent.getUserBalance();
+      this.logStep(`Current balance: ${balance}`);
+      return balance;
+    } catch (error) {
+      this.logError(`Failed to get balance: ${error}`);
+      return '0';
+    }
   }
 }

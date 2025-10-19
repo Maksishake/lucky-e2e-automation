@@ -119,17 +119,6 @@ export default defineConfig({
       }
     },
     
-    // Authentication tests
-    {
-      name: 'auth',
-      testMatch: 'tests/auth/**/*.spec.ts',
-      grep: /^(?!.*without-global-setup).*$/,
-      use: { 
-        ...devices['Desktop Chrome'],
-        storageState: getStorageState()
-      }
-    },
-    
     // Unit tests
     {
       name: 'unit',
@@ -140,10 +129,20 @@ export default defineConfig({
       }
     },
     
+    // Geo tests
+    {
+      name: 'geo',
+      testMatch: 'tests/geo/**/*.spec.ts',
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: getStorageState()
+      }
+    },
+    
     // Firefox testing
     {
       name: 'firefox',
-      testMatch: 'tests/{smoke,auth}/**/*.spec.ts',
+      testMatch: 'tests/{smoke,unit,geo}/**/*.spec.ts',
       grep: /^(?!.*without-global-setup).*$/,
       use: { 
         ...devices['Desktop Firefox'],

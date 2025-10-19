@@ -15,7 +15,13 @@
       "@components/*": ["./src/components/*"],
       "@core/*": ["./src/core/*"],
       "@types/*": ["./src/types/*"],
-      "@config/*": ["./config/*"]
+      "@config/*": ["./config/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@setup/*": ["./src/setup/*"],
+      "@game/*": ["./src/services/game/*"],
+      "@sidebar/*": ["./src/services/sidebar/*"],
+      "@tournament/*": ["./src/services/tournament/*"],
+      "@user/*": ["./src/services/user/*"]
     },
     "resolveJsonModule": true,
     "allowImportingTsExtensions": false,
@@ -72,6 +78,9 @@
     "test-results",
     "playwright-report",
     "dist",
-    "build"
+    "build",
+    "docs",
+    "reports",
+    "logs"
   ]
 }

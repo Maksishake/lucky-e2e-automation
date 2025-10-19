@@ -1,357 +1,220 @@
 /**
- * Game Grid Component - Компонент сетки игр
+ * Game Grid Component - Упрощенный компонент сетки игр
+ * Применяет принцип SRP - только работа с сеткой игр
  */
 
-import { Page } from '@playwright/test';
-import { BaseComponent } from '../../core/base.component';
+import { Page, Locator } from '@playwright/test';
+import { BaseComponent } from '@/core/abstract/base-component';
+import { ILogger } from '@/core/interfaces/logger.interface';
+import { GameInfo, GameGridState } from '@/types/game.types';
 import { GameCardComponent } from './game-card.component';
-import { Game, GameGridState, GameSearchResult } from '../../types/game.types';
+import { GameSelectors } from '@/core/selectors/GameSelectors';
+import { logger } from '@/core/logger';
 
 export class GameGridComponent extends BaseComponent {
-
-  constructor(page: Page) {
-    super(page, 'GameGrid', '.game-cards-vertical');
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'GameGrid', GameSelectors.GAME_GRID, loggerInstance || logger);
   }
 
-  // ============ ОСНОВНЫЕ ЭЛЕМЕНТЫ ============
-  get gridContainerSelector() {
-    return this.page.locator('.game-cards-vertical');
+  // ============ СЕЛЕКТОРЫ ============
+  
+  get gameCards(): Locator {
+    return this.rootElement.locator(GameSelectors.GAME_CARDS);
   }
 
-  get gameCardSelector() {
-    return this.page.locator('.game-card');
+  get loadingSpinner(): Locator {
+    return this.rootElement.locator(GameSelectors.LOADING_SPINNER);
   }
 
-  get loadMoreButtonSelector() {
-    return this.page.locator('button[wire\\:click="loadMore"]');
-  }
-
-  get loadingTextSelector() {
-    return this.page.locator('span[wire\\:loading]');
-  }
-
-  get preloaderSelector() {
-    return this.page.locator('#preloader');
-  }
-
-  get loaderSelector() {
-    return this.page.locator('.loader');
+  get emptyState(): Locator {
+    return this.rootElement.locator(GameSelectors.EMPTY_STATE);
   }
 
   // ============ ОСНОВНЫЕ МЕТОДЫ ============
-  /**
-   * Проверить, видна ли сетка игр
-   */
-  async isGridVisible(): Promise<boolean> {
-    return await this.isVisible();
-  }
 
-  /**
-   * Получить количество игровых карточек
-   */
   async getGamesCount(): Promise<number> {
-    const gameCards = this.gameCardSelector;
-    return await gameCards.count();
-  }
-
-  // ============ РАБОТА С КАРТОЧКАМИ ============
-  /**
-   * Получить игровую карточку по индексу
-   */
-  async getGameCard(): Promise<GameCardComponent> {
-    return new GameCardComponent(this.page);
-  }
-
-  /**
-   * Получить все игровые карточки
-   */
-  async getAllGameCards(): Promise<GameCardComponent[]> {
-    const count = await this.getGamesCount();
-    const cards: GameCardComponent[] = [];
-
-    for (let i = 0; i < count; i++) {
-      const card = await this.getGameCard();
-      cards.push(card);
+    try {
+      await this.waitForGridLoad();
+      const count = await this.gameCards.count();
+      this.logStep(`Games count: ${count}`);
+      return count;
+    } catch (error) {
+      this.logError('Failed to get games count', error);
+      return 0;
     }
-
-    return cards;
   }
 
-  /**
-   * Получить информацию о всех играх
-   */
-  async getAllGames(): Promise<Game[]> {
-    const cards = await this.getAllGameCards();
-    const games: Game[] = [];
+  async getGameCardByIndex(index: number): Promise<GameCardComponent> {
+    const cardLocator = this.gameCards.nth(index);
+    return new GameCardComponent(this.page, cardLocator, this.logger);
+  }
 
-    for (const card of cards) {
-      const gameInfo = await card.getGameInfo();
-      games.push(gameInfo);
+  async getGameInfoByIndex(index: number): Promise<GameInfo | null> {
+    try {
+      const gameCard = await this.getGameCardByIndex(index);
+      const gameInfo = await gameCard.getGameInfo();
+      gameInfo.index = index; // Устанавливаем правильный индекс
+      return gameInfo;
+    } catch (error) {
+      this.logError(`Failed to get game info by index: ${index}`, error);
+      return null;
     }
-
-    return games;
   }
 
-  // ============ ПОИСК И ФИЛЬТРАЦИЯ ============
-  /**
-   * Найти игру по названию
-   */
-  async findGameByTitle(title: string): Promise<GameCardComponent | null> {
-    const cards = await this.getAllGameCards();
+  async clickGameByIndex(index: number): Promise<void> {
+    this.logStep(`Clicking game card at index: ${index}`);
     
-    for (const card of cards) {
-      const gameTitle = await card.getGameTitle();
-      if (gameTitle.toLowerCase().includes(title.toLowerCase())) {
-        return card;
-      }
+    try {
+      const gameCard = await this.getGameCardByIndex(index);
+      await gameCard.clickCard();
+      this.logSuccess(`Game card clicked at index: ${index}`);
+    } catch (error) {
+      this.logError(`Failed to click game at index: ${index}`, error);
+      throw error;
     }
-
-    return null;
   }
 
-  /**
-   * Найти игры по провайдеру
-   */
-  async findGamesByProvider(provider: string): Promise<GameCardComponent[]> {
-    const cards = await this.getAllGameCards();
-    const matchingCards: GameCardComponent[] = [];
-
-    for (const card of cards) {
-      const gameProvider = await card.getGameProvider();
-      if (gameProvider.toLowerCase().includes(provider.toLowerCase())) {
-        matchingCards.push(card);
-      }
-    }
-
-    return matchingCards;
-  }
-
-  /**
-   * Найти избранные игры
-   */
-  async findFavoriteGames(): Promise<GameCardComponent[]> {
-    const cards = await this.getAllGameCards();
-    const favoriteCards: GameCardComponent[] = [];
-
-    for (const card of cards) {
-      const isFavorite = await card.isFavorite();
-      if (isFavorite) {
-        favoriteCards.push(card);
-      }
-    }
-
-    return favoriteCards;
-  }
-
-  // ============ ЗАГРУЗКА И ПАГИНАЦИЯ ============
-  /**
-   * Загрузить больше игр
-   */
-  async loadMoreGames(): Promise<void> {
-    this.logStep('Loading more games');
-    await this.loadMoreButtonSelector.click();
-    await this.waitForLoadingComplete();
-    this.logSuccess('Loaded more games');
-  }
-
-  /**
-   * Проверить, есть ли кнопка "Загрузить больше"
-   */
-  async hasLoadMoreButton(): Promise<boolean> {
-    const button = this.loadMoreButtonSelector;
-    return await button.isVisible();
-  }
-
-  /**
-   * Проверить, загружаются ли игры
-   */
-  async isLoading(): Promise<boolean> {
-    const loadingText = this.loadingTextSelector;
-    const preloader = this.preloaderSelector;
-    
-    const isTextLoading = await loadingText.isVisible();
-    const isPreloaderVisible = await preloader.isVisible();
-    
-    return isTextLoading || isPreloaderVisible;
-  }
-
-  /**
-   * Дождаться завершения загрузки
-   */
-  async waitForLoadingComplete(): Promise<void> {
-    this.logStep('Waiting for loading to complete');
-    
-    // Ждем исчезновения прелоадера
-    await this.preloaderSelector.waitFor({ state: 'hidden' });
-    
-    // Ждем исчезновения текста загрузки
-    await this.loadingTextSelector.waitFor({ state: 'hidden' });
-    
-    // Дополнительная пауза для стабилизации
-    await this.page.waitForTimeout(1000);
-    
-    this.logSuccess('Loading completed');
-  }
-
-  /**
-   * Дождаться загрузки сетки
-   */
   async waitForGridLoad(): Promise<void> {
     this.logStep('Waiting for game grid to load');
-    await this.gridContainerSelector.waitFor({ state: 'visible' });
-    await this.gameCardSelector.waitFor({ state: 'visible' });
-    this.logSuccess('Game grid loaded');
+    
+    try {
+      // Ждем исчезновения спиннера загрузки
+      if (await this.loadingSpinner.isVisible()) {
+        await this.loadingSpinner.waitFor({ state: 'hidden', timeout: 10000 });
+      }
+      
+      // Ждем появления хотя бы одной карточки игры
+      await this.gameCards.first().waitFor({ state: 'visible', timeout: 15000 });
+      
+      this.logSuccess('Game grid loaded');
+    } catch (error) {
+      this.logError('Game grid did not load in time', error);
+      throw error;
+    }
   }
 
-  // ============ ПРОКРУТКА И НАВИГАЦИЯ ============
-  /**
-   * Прокрутить к кнопке "Загрузить больше"
-   */
-  async scrollToLoadMoreButton(): Promise<void> {
-    this.logStep('Scrolling to load more button');
-    const button = this.loadMoreButtonSelector;
-    await button.scrollIntoViewIfNeeded();
-    this.logSuccess('Scrolled to load more button');
-  }
-
-  /**
-   * Прокрутить к концу сетки
-   */
-  async scrollToBottom(): Promise<void> {
-    this.logStep('Scrolling to bottom of grid');
-    await this.page.evaluate(() => {
-      window.scrollTo(0, document.body.scrollHeight);
-    });
-    await this.page.waitForTimeout(500);
-    this.logSuccess('Scrolled to bottom');
-  }
-
-  // ============ СОСТОЯНИЕ И ИНФОРМАЦИЯ ============
-  /**
-   * Получить состояние сетки
-   */
   async getGridState(): Promise<GameGridState> {
-    const games = await this.getAllGames();
-    const isLoading = await this.isLoading();
-    const hasMore = await this.hasLoadMoreButton();
-
-    return {
-      games,
-      isLoading,
-      hasMore,
-      currentPage: 1, // Будет обновляться при пагинации
-      totalCount: games.length
-    };
+    this.logStep('Getting game grid state');
+    
+    try {
+      const gamesCount = await this.getGamesCount();
+      const gamesInfo: GameInfo[] = [];
+      
+      for (let i = 0; i < gamesCount; i++) {
+        const info = await this.getGameInfoByIndex(i);
+        if (info) {
+          gamesInfo.push(info);
+        }
+      }
+      
+      const state: GameGridState = {
+        games: gamesInfo.map(info => ({
+          id: `${info.index}`,
+          title: info.title,
+          provider: info.provider,
+          imageUrl: info.image || '',
+          isFavorite: false, // Будет установлено отдельно
+          hasDemo: info.hasDemoButton || false,
+          hasReal: info.hasPlayButton || false,
+          category: info.type || 'slot',
+          gameUrl: ''
+        })),
+        isLoading: false,
+        hasMore: false,
+        currentPage: 1,
+        totalCount: gamesCount
+      };
+      
+      this.logSuccess('Game grid state retrieved');
+      return state;
+    } catch (error) {
+      this.logError('Failed to get grid state', error);
+      return {
+        games: [],
+        isLoading: false,
+        hasMore: false,
+        currentPage: 1,
+        totalCount: 0
+      };
+    }
   }
 
-  /**
-   * Получить результаты поиска
-   */
-  async getSearchResults(): Promise<GameSearchResult> {
-    const games = await this.getAllGames();
-    const hasMore = await this.hasLoadMoreButton();
+  // ============ ПРОВЕРКИ СОСТОЯНИЯ ============
 
-    return {
-      games,
-      totalCount: games.length,
-      hasMore
-    };
+  async isGridVisible(): Promise<boolean> {
+    return await this.rootElement.isVisible();
   }
 
-  /**
-   * Проверить, пуста ли сетка
-   */
   async isEmpty(): Promise<boolean> {
+    return await this.emptyState.isVisible();
+  }
+
+  async isLoading(): Promise<boolean> {
+    return await this.loadingSpinner.isVisible();
+  }
+
+  async hasGames(): Promise<boolean> {
     const count = await this.getGamesCount();
-    return count === 0;
+    return count > 0;
   }
 
-  // ============ ФИЛЬТРАЦИЯ ПО ТИПУ ИГР ============
-  /**
-   * Получить игры с демо режимом
-   */
-  async getGamesWithDemo(): Promise<GameCardComponent[]> {
-    const cards = await this.getAllGameCards();
-    const demoCards: GameCardComponent[] = [];
+  // ============ ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ============
 
-    for (const card of cards) {
-      const hasDemo = await card.hasDemoButton();
-      if (hasDemo) {
-        demoCards.push(card);
+  async scrollToGame(index: number): Promise<void> {
+    this.logStep(`Scrolling to game at index: ${index}`);
+    
+    try {
+      const gameCard = this.gameCards.nth(index);
+      await gameCard.scrollIntoViewIfNeeded();
+      this.logSuccess(`Scrolled to game at index: ${index}`);
+    } catch (error) {
+      this.logError(`Failed to scroll to game at index: ${index}`, error);
+      throw error;
+    }
+  }
+
+  async getAllGameTitles(): Promise<string[]> {
+    this.logStep('Getting all game titles');
+    
+    try {
+      const count = await this.getGamesCount();
+      const titles: string[] = [];
+      
+      for (let i = 0; i < count; i++) {
+        const gameCard = await this.getGameCardByIndex(i);
+        const title = await gameCard.getCardTitle();
+        titles.push(title);
       }
+      
+      this.logSuccess(`Retrieved ${titles.length} game titles`);
+      return titles;
+    } catch (error) {
+      this.logError('Failed to get all game titles', error);
+      return [];
     }
-
-    return demoCards;
   }
 
-  /**
-   * Получить игры с реальным режимом
-   */
-  async getGamesWithReal(): Promise<GameCardComponent[]> {
-    const cards = await this.getAllGameCards();
-    const realCards: GameCardComponent[] = [];
-
-    for (const card of cards) {
-      const hasReal = await card.hasRealButton();
-      if (hasReal) {
-        realCards.push(card);
+  async findGameByTitle(title: string): Promise<number | null> {
+    this.logStep(`Finding game by title: ${title}`);
+    
+    try {
+      const count = await this.getGamesCount();
+      
+      for (let i = 0; i < count; i++) {
+        const gameCard = await this.getGameCardByIndex(i);
+        const gameTitle = await gameCard.getCardTitle();
+        
+        if (gameTitle.toLowerCase().includes(title.toLowerCase())) {
+          this.logSuccess(`Game found at index: ${i}`);
+          return i;
+        }
       }
+      
+      this.logStep(`Game not found: ${title}`);
+      return null;
+    } catch (error) {
+      this.logError(`Failed to find game by title: ${title}`, error);
+      return null;
     }
-
-    return realCards;
-  }
-
-  /**
-   * Получить игры по категории (по провайдеру)
-   */
-  async getGamesByCategory(category: string): Promise<GameCardComponent[]> {
-    return await this.findGamesByProvider(category);
-  }
-
-  // ============ ВЗАИМОДЕЙСТВИЕ ============
-  /**
-   * Кликнуть по случайной игре
-   */
-  async clickRandomGame(): Promise<GameCardComponent> {
-    const count = await this.getGamesCount();
-    const randomIndex = Math.floor(Math.random() * count);
-    const card = await this.getGameCard();
-    
-    this.logStep(`Clicking random game at index ${randomIndex}`);
-    await card.clickCard();
-    this.logSuccess('Clicked random game');
-    
-    return card;
-  }
-
-  // ============ ПРОВЕРКИ ЗАГРУЗКИ ============
-  /**
-   * Проверить, загружены ли все изображения
-   */
-  async areAllImagesLoaded(): Promise<boolean> {
-    const cards = await this.getAllGameCards();
-    
-    for (const card of cards) {
-      const isLoaded = await card.isImageLoaded();
-      if (!isLoaded) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * Дождаться загрузки всех изображений
-   */
-  async waitForAllImagesLoad(): Promise<void> {
-    this.logStep('Waiting for all images to load');
-    
-    const cards = await this.getAllGameCards();
-    for (const card of cards) {
-      await card.waitForCardLoad();
-    }
-    
-    this.logSuccess('All images loaded');
   }
 }

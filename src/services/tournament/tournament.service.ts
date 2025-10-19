@@ -3,108 +3,79 @@
  */
 
 import { Page } from '@playwright/test';
-import { BaseService } from '../../core/base.service';
-import { TournamentPage } from '../../pages/tournament.page';
-import { TournamentModalComponent } from '../../components/modals/tournament-modal';
-import { TournamentInfo, TournamentPageStats, TournamentFilters, TournamentSearchResult } from '../../types/tournament.types';
+import { BaseService } from '@/core/abstract/base-service';
+import { TournamentModalComponent } from '@/components/modals/tournament-modal';
+import { ILogger } from '@/core/interfaces/logger.interface';
+import { logger } from '@/core/logger';
+import { 
+  TournamentInfo, 
+  TournamentModalInfo, 
+  TournamentTimerInfo, 
+  TournamentPrize,
+  TournamentPageStats,
+  TournamentFilters,
+  TournamentSearchResult
+} from '@/types/tournament.types';
 
 export class TournamentService extends BaseService {
-  private tournamentPage: TournamentPage;
-  private tournamentModal: TournamentModalComponent;
+  private readonly tournamentModal: TournamentModalComponent;
 
-  constructor(page: Page) {
-    super(page, 'TournamentService');
-    
-    this.tournamentPage = new TournamentPage(page);
-    this.tournamentModal = new TournamentModalComponent(page);
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'TournamentService', loggerInstance || logger);
+    this.tournamentModal = new TournamentModalComponent(page, loggerInstance);
   }
 
-  /**
-   * Перейти на страницу турниров
-   */
-  async navigateToTournaments(): Promise<void> {
-    this.logStep('Navigating to tournaments page');
-    
-    try {
-      await this.tournamentPage.navigate();
-      await this.tournamentPage.waitForPageLoad();
-      this.logSuccess('Navigated to tournaments page');
-    } catch (error) {
-      this.logError(`Failed to navigate to tournaments page: ${error}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Получить все турниры на странице
-   */
+  // ============ ПОЛУЧЕНИЕ ИНФОРМАЦИИ О ТУРНИРАХ ============
+  
   async getAllTournaments(): Promise<TournamentInfo[]> {
     this.logStep('Getting all tournaments');
     
     try {
-      const tournaments = await this.tournamentPage.getAllTournamentsInfo();
-      this.logSuccess(`Retrieved ${tournaments.length} tournaments`);
+      const tournamentCards = await this.page.locator('.tournament-card').all();
+      const tournaments: TournamentInfo[] = [];
+      
+      for (let i = 0; i < tournamentCards.length; i++) {
+        const card = tournamentCards[i];
+        const tournament = await this.extractTournamentInfo(card, i);
+        tournaments.push(tournament);
+      }
+      
+      this.logSuccess(`Found ${tournaments.length} tournaments`);
       return tournaments;
     } catch (error) {
-      this.logError(`Failed to get all tournaments: ${error}`);
+      this.logError(`Failed to get tournaments: ${error}`);
       return [];
     }
   }
 
-  /**
-   * Получить турнир по индексу
-   */
   async getTournamentByIndex(index: number): Promise<TournamentInfo | null> {
     this.logStep(`Getting tournament by index: ${index}`);
     
     try {
-      const tournament = await this.tournamentPage.getTournamentInfo(index);
-      if (tournament) {
-        this.logSuccess(`Tournament retrieved by index ${index}: ${tournament.title}`);
-        return { index, ...tournament };
-      } else {
-        this.logError(`Tournament not found by index ${index}`);
-        return null;
+      const tournamentCards = await this.page.locator('.tournament-card').all();
+      
+      if (index >= 0 && index < tournamentCards.length) {
+        const card = tournamentCards[index];
+        const tournament = await this.extractTournamentInfo(card, index);
+        this.logSuccess(`Tournament found at index ${index}: ${tournament.title}`);
+        return tournament;
       }
+      
+      this.logError(`Tournament not found at index: ${index}`);
+      return null;
     } catch (error) {
       this.logError(`Failed to get tournament by index ${index}: ${error}`);
       return null;
     }
   }
 
-  /**
-   * Найти турнир по названию
-   */
-  async findTournamentByTitle(title: string): Promise<TournamentInfo | null> {
-    this.logStep(`Finding tournament by title: ${title}`);
-    
-    try {
-      const allTournaments = await this.getAllTournaments();
-      const tournament = allTournaments.find(t => 
-        t.title.toLowerCase().includes(title.toLowerCase())
-      );
-      
-      if (tournament) {
-        this.logSuccess(`Tournament found by title: ${title}`);
-        return tournament;
-      } else {
-        this.logError(`Tournament not found by title: ${title}`);
-        return null;
-      }
-    } catch (error) {
-      this.logError(`Failed to find tournament by title ${title}: ${error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Получить активные турниры
-   */
   async getActiveTournaments(): Promise<TournamentInfo[]> {
     this.logStep('Getting active tournaments');
     
     try {
-      const activeTournaments = await this.tournamentPage.getActiveTournaments();
+      const allTournaments = await this.getAllTournaments();
+      const activeTournaments = allTournaments.filter(t => t.status === 'active');
+      
       this.logSuccess(`Found ${activeTournaments.length} active tournaments`);
       return activeTournaments;
     } catch (error) {
@@ -113,14 +84,13 @@ export class TournamentService extends BaseService {
     }
   }
 
-  /**
-   * Получить завершенные турниры
-   */
   async getCompletedTournaments(): Promise<TournamentInfo[]> {
     this.logStep('Getting completed tournaments');
     
     try {
-      const completedTournaments = await this.tournamentPage.getCompletedTournaments();
+      const allTournaments = await this.getAllTournaments();
+      const completedTournaments = allTournaments.filter(t => t.status === 'completed');
+      
       this.logSuccess(`Found ${completedTournaments.length} completed tournaments`);
       return completedTournaments;
     } catch (error) {
@@ -129,170 +99,136 @@ export class TournamentService extends BaseService {
     }
   }
 
-  /**
-   * Открыть детали турнира по индексу
-   */
-  async openTournamentDetails(index: number): Promise<boolean> {
-    this.logStep(`Opening tournament details by index: ${index}`);
+  // ============ РАБОТА С МОДАЛЬНЫМ ОКНОМ ТУРНИРА ============
+  
+  async openTournamentDetails(tournamentIndex: number): Promise<void> {
+    this.logStep(`Opening tournament details for index: ${tournamentIndex}`);
     
     try {
-      const success = await this.tournamentPage.clickDetailsButtonByIndex(index);
-      if (success) {
-        await this.tournamentModal.waitForModalOpen();
-        this.logSuccess(`Tournament details opened for index ${index}`);
-      } else {
-        this.logError(`Failed to open tournament details for index ${index}`);
-      }
-      return success;
+      const tournamentCard = this.page.locator('.tournament-card').nth(tournamentIndex);
+      const detailsButton = tournamentCard.locator('[data-testid="tournament-details"]');
+      
+      await detailsButton.click();
+      await this.tournamentModal.waitForOpen();
+      
+      this.logSuccess('Tournament details opened');
     } catch (error) {
-      this.logError(`Failed to open tournament details by index ${index}: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Принять участие в турнире по индексу
-   */
-  async participateInTournament(index: number): Promise<boolean> {
-    this.logStep(`Participating in tournament by index: ${index}`);
-    
-    try {
-      const success = await this.tournamentPage.clickParticipateButtonByIndex(index);
-      if (success) {
-        this.logSuccess(`Participated in tournament by index ${index}`);
-      } else {
-        this.logError(`Failed to participate in tournament by index ${index}`);
-      }
-      return success;
-    } catch (error) {
-      this.logError(`Failed to participate in tournament by index ${index}: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Закрыть модальное окно турнира
-   */
-  async closeTournamentModal(): Promise<void> {
-    this.logStep('Closing tournament modal');
-    
-    try {
-      await this.tournamentModal.closeModal();
-      this.logSuccess('Tournament modal closed');
-    } catch (error) {
-      this.logError(`Failed to close tournament modal: ${error}`);
+      this.logError(`Failed to open tournament details: ${error}`);
       throw error;
     }
   }
 
-  /**
-   * Получить информацию о турнире из модального окна
-   */
-  async getTournamentModalInfo(): Promise<any> {
-    this.logStep('Getting tournament modal info');
+  async participateInTournament(tournamentIndex: number): Promise<void> {
+    this.logStep(`Participating in tournament: ${tournamentIndex}`);
     
     try {
-      const modalInfo = await this.tournamentModal.getModalInfo();
-      this.logSuccess('Tournament modal info retrieved');
-      return modalInfo;
+      const tournamentCard = this.page.locator('.tournament-card').nth(tournamentIndex);
+      const participateButton = tournamentCard.locator('[data-testid="tournament-participate"]');
+      
+      await participateButton.click();
+      await this.tournamentModal.waitForOpen();
+      await this.tournamentModal.participateInTournament();
+      
+      this.logSuccess('Tournament participation completed');
+    } catch (error) {
+      this.logError(`Failed to participate in tournament: ${error}`);
+      throw error;
+    }
+  }
+
+  async getTournamentModalInfo(): Promise<TournamentModalInfo> {
+    this.logStep('Getting tournament modal information');
+    
+    try {
+      const title = await this.tournamentModal.getTitle();
+      const description = await this.tournamentModal.getChildText('.tournament-description');
+      const prizeFund = await this.tournamentModal.getChildText('.prize-fund');
+      const rules = await this.tournamentModal.getChildText('.tournament-rules');
+      const participationInfo = await this.tournamentModal.getChildText('.participation-info');
+      
+      const info: TournamentModalInfo = {
+        title,
+        description,
+        prizeFund,
+        rules,
+        participationInfo
+      };
+      
+      this.logSuccess('Tournament modal information retrieved');
+      return info;
     } catch (error) {
       this.logError(`Failed to get tournament modal info: ${error}`);
-      return null;
+      throw error;
     }
   }
 
-  /**
-   * Принять участие в турнире через модальное окно
-   */
-  async participateInTournamentViaModal(): Promise<boolean> {
-    this.logStep('Participating in tournament via modal');
+  async getTournamentTimerInfo(): Promise<TournamentTimerInfo> {
+    this.logStep('Getting tournament timer information');
     
     try {
-      const success = await this.tournamentModal.clickParticipateButton();
-      if (success) {
-        this.logSuccess('Participated in tournament via modal');
-      } else {
-        this.logError('Failed to participate in tournament via modal');
-      }
-      return success;
-    } catch (error) {
-      this.logError(`Failed to participate in tournament via modal: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Получить статистику страницы турниров
-   */
-  async getTournamentPageStats(): Promise<TournamentPageStats> {
-    this.logStep('Getting tournament page stats');
-    
-    try {
-      const stats = await this.tournamentPage.getPageStats();
-      this.logSuccess('Tournament page stats retrieved');
-      return stats;
-    } catch (error) {
-      this.logError(`Failed to get tournament page stats: ${error}`);
-      return {
-        tournamentsCount: 0,
-        activeTournaments: 0,
-        completedTournaments: 0,
-        hasTournaments: false,
-        imagesLoaded: false
+      const timeRemaining = await this.tournamentModal.getChildText('.timer');
+      const isActive = await this.tournamentModal.isChildVisible('.timer.active');
+      
+      const timerInfo: TournamentTimerInfo = {
+        timeRemaining,
+        isActive
       };
+      
+      this.logSuccess('Tournament timer information retrieved');
+      return timerInfo;
+    } catch (error) {
+      this.logError(`Failed to get tournament timer info: ${error}`);
+      throw error;
     }
   }
 
-  /**
-   * Поиск турниров с фильтрами
-   */
-  async searchTournaments(filters: TournamentFilters): Promise<TournamentSearchResult> {
-    this.logStep('Searching tournaments with filters');
+  async getTournamentPrizesTable(): Promise<TournamentPrize[]> {
+    this.logStep('Getting tournament prizes table');
     
     try {
-      let tournaments: TournamentInfo[] = [];
+      const prizeRows = await this.tournamentModal.findChild('.prizes-table tbody tr').all();
+      const prizes: TournamentPrize[] = [];
       
-      if (filters.status === 'active') {
-        tournaments = await this.getActiveTournaments();
-      } else if (filters.status === 'completed') {
-        tournaments = await this.getCompletedTournaments();
-      } else {
-        tournaments = await this.getAllTournaments();
+      for (const row of prizeRows) {
+        const position = await row.locator('td:first-child').textContent() || '';
+        const prize = await row.locator('td:last-child').textContent() || '';
+        
+        prizes.push({ position, prize });
       }
       
-      // Фильтрация по призовому фонду
-      if (filters.prizeFundMin || filters.prizeFundMax) {
-        tournaments = tournaments.filter(tournament => {
-          const prizeFund = tournament.prizeFund;
-          const prizeAmount = parseInt(prizeFund.replace(/[^\d]/g, '')) || 0;
-          
-          if (filters.prizeFundMin && prizeAmount < filters.prizeFundMin) {
-            return false;
-          }
-          
-          if (filters.prizeFundMax && prizeAmount > filters.prizeFundMax) {
-            return false;
-          }
-          
-          return true;
-        });
-      }
+      this.logSuccess(`Retrieved ${prizes.length} prizes`);
+      return prizes;
+    } catch (error) {
+      this.logError(`Failed to get tournament prizes: ${error}`);
+      return [];
+    }
+  }
+
+  // ============ ФИЛЬТРАЦИЯ И ПОИСК ============
+  
+  async searchTournaments(query: string): Promise<TournamentSearchResult> {
+    this.logStep(`Searching tournaments with query: ${query}`);
+    
+    try {
+      const searchInput = this.page.locator('[data-testid="tournament-search"]');
+      await searchInput.fill(query);
+      await this.page.waitForTimeout(1000); // Wait for search results
       
-      const activeCount = tournaments.filter(t => 
-        !t.status.toLowerCase().includes('завершився') && 
-        !t.status.toLowerCase().includes('завершено')
-      ).length;
+      const tournaments = await this.getAllTournaments();
+      const filteredTournaments = tournaments.filter(t => 
+        t.title.toLowerCase().includes(query.toLowerCase()) ||
+        t.excerpt.toLowerCase().includes(query.toLowerCase())
+      );
       
-      const completedCount = tournaments.length - activeCount;
-      
-      this.logSuccess(`Found ${tournaments.length} tournaments with filters`);
-      
-      return {
-        tournaments,
-        totalCount: tournaments.length,
-        activeCount,
-        completedCount
+      const result: TournamentSearchResult = {
+        tournaments: filteredTournaments,
+        totalCount: filteredTournaments.length,
+        activeCount: filteredTournaments.filter(t => t.status === 'active').length,
+        completedCount: filteredTournaments.filter(t => t.status === 'completed').length
       };
+      
+      this.logSuccess(`Found ${result.totalCount} tournaments matching "${query}"`);
+      return result;
     } catch (error) {
       this.logError(`Failed to search tournaments: ${error}`);
       return {
@@ -304,69 +240,100 @@ export class TournamentService extends BaseService {
     }
   }
 
-  /**
-   * Проверить, есть ли турниры на странице
-   */
-  async hasTournaments(): Promise<boolean> {
-    this.logStep('Checking if tournaments are present');
+  async filterTournaments(filters: TournamentFilters): Promise<TournamentInfo[]> {
+    this.logStep('Filtering tournaments');
     
     try {
-      const hasTournaments = await this.tournamentPage.hasTournaments();
-      this.logStep(`Tournaments present: ${hasTournaments}`);
-      return hasTournaments;
-    } catch (error) {
-      this.logError(`Failed to check tournaments presence: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Дождаться загрузки всех изображений турниров
-   */
-  async waitForAllTournamentImagesLoad(): Promise<void> {
-    this.logStep('Waiting for all tournament images to load');
-    
-    try {
-      await this.tournamentPage.waitForAllTournamentImagesLoad();
-      this.logSuccess('All tournament images loaded');
-    } catch (error) {
-      this.logError(`Failed to wait for tournament images: ${error}`);
-    }
-  }
-
-  /**
-   * Прокрутить к турниру по индексу
-   */
-  async scrollToTournament(index: number): Promise<boolean> {
-    this.logStep(`Scrolling to tournament by index: ${index}`);
-    
-    try {
-      const success = await this.tournamentPage.scrollToTournamentByIndex(index);
-      if (success) {
-        this.logSuccess(`Scrolled to tournament by index ${index}`);
-      } else {
-        this.logError(`Failed to scroll to tournament by index ${index}`);
+      let tournaments = await this.getAllTournaments();
+      
+      if (filters.status && filters.status !== 'all') {
+        tournaments = tournaments.filter(t => t.status === filters.status);
       }
-      return success;
+      
+      if (filters.prizeFundMin !== undefined) {
+        tournaments = tournaments.filter(t => {
+          const prizeFund = parseFloat(t.prizeFund.replace(/[^\d.]/g, ''));
+          return prizeFund >= filters.prizeFundMin!;
+        });
+      }
+      
+      if (filters.prizeFundMax !== undefined) {
+        tournaments = tournaments.filter(t => {
+          const prizeFund = parseFloat(t.prizeFund.replace(/[^\d.]/g, ''));
+          return prizeFund <= filters.prizeFundMax!;
+        });
+      }
+      
+      this.logSuccess(`Filtered to ${tournaments.length} tournaments`);
+      return tournaments;
     } catch (error) {
-      this.logError(`Failed to scroll to tournament by index ${index}: ${error}`);
-      return false;
+      this.logError(`Failed to filter tournaments: ${error}`);
+      return [];
     }
   }
 
-  /**
-   * Проверить, видим ли турнир по индексу
-   */
-  async isTournamentVisible(index: number): Promise<boolean> {
-    this.logStep(`Checking if tournament is visible by index: ${index}`);
+  // ============ СТАТИСТИКА СТРАНИЦЫ ============
+  
+  async getPageStats(): Promise<TournamentPageStats> {
+    this.logStep('Getting tournament page statistics');
     
     try {
-      const isVisible = await this.tournamentPage.isTournamentVisibleByIndex(index);
-      this.logStep(`Tournament visible by index ${index}: ${isVisible}`);
-      return isVisible;
+      const allTournaments = await this.getAllTournaments();
+      const activeTournaments = allTournaments.filter(t => t.status === 'active');
+      const completedTournaments = allTournaments.filter(t => t.status === 'completed');
+      
+      // Check if images are loaded
+      const images = await this.page.locator('.tournament-card img').all();
+      let imagesLoaded = true;
+      
+      for (const img of images) {
+        const isLoaded = await img.evaluate((el: HTMLImageElement) => el.complete && el.naturalHeight !== 0);
+        if (!isLoaded) {
+          imagesLoaded = false;
+          break;
+        }
+      }
+      
+      const stats: TournamentPageStats = {
+        tournamentsCount: allTournaments.length,
+        activeTournaments: activeTournaments.length,
+        completedTournaments: completedTournaments.length,
+        hasTournaments: allTournaments.length > 0,
+        imagesLoaded
+      };
+      
+      this.logSuccess('Tournament page statistics retrieved');
+      return stats;
     } catch (error) {
-      this.logError(`Failed to check tournament visibility by index ${index}: ${error}`);
-      return false;
+      this.logError(`Failed to get page stats: ${error}`);
+      return {
+        tournamentsCount: 0,
+        activeTournaments: 0,
+        completedTournaments: 0,
+        hasTournaments: false,
+        imagesLoaded: false
+      };
     }
+  }
+
+  // ============ ПРИВАТНЫЕ МЕТОДЫ ============
+  
+  private async extractTournamentInfo(card: any, index: number): Promise<TournamentInfo> {
+    const title = await card.locator('.tournament-title').textContent() || '';
+    const excerpt = await card.locator('.tournament-excerpt').textContent() || '';
+    const prizeFund = await card.locator('.prize-fund').textContent() || '';
+    const status = await card.locator('.tournament-status').textContent() || '';
+    const hasDetailsButton = await card.locator('[data-testid="tournament-details"]').isVisible();
+    const hasParticipateButton = await card.locator('[data-testid="tournament-participate"]').isVisible();
+    
+    return {
+      index,
+      title,
+      excerpt,
+      prizeFund,
+      status: status.toLowerCase(),
+      hasDetailsButton,
+      hasParticipateButton
+    };
   }
 }

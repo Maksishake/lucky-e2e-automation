@@ -1,659 +1,51 @@
 /**
- * Game Service - Оркестратор для работы с играми
+ * Game Service - Рефакторированный сервис для работы с играми
+ * Устранены дубликаты, используется базовый класс и централизованные селекторы
  */
 
-import { Page, expect } from '@playwright/test';
-import { BaseService } from '../../core/base.service';
-import { GameDetectionService } from './game-detection.service';
-import { GameStabilityService } from './game-stability.service';
-import { GameErrorService } from './game-error.service';
-import { GameUrlService } from './game-url.service';
-import { GameInteractionService } from './game-interaction.service';
+import { Page } from '@playwright/test';
+import { BaseGameService } from '@/core/abstract/base-game-service';
+import { ILogger } from '@/core/interfaces/logger.interface';
+import { GameInfo, GameTestResult, GameStabilityResult, GameErrorType, GameType, GameStatus } from '@/types/game.types';
+import { logger } from '@/core/logger';
 
-export class GameService extends BaseService {
-  // Специализированные сервисы
-  private gameDetectionService: GameDetectionService;
-  private gameStabilityService: GameStabilityService;
-  private gameErrorService: GameErrorService;
-  private gameUrlService: GameUrlService;
-  private gameInteractionService: GameInteractionService;
-
-  constructor(page: Page) {
-    super(page, 'GameService');
-    
-    // Инициализируем специализированные сервисы
-    this.gameDetectionService = new GameDetectionService(page);
-    this.gameStabilityService = new GameStabilityService(page);
-    this.gameErrorService = new GameErrorService(page);
-    this.gameUrlService = new GameUrlService(page);
-    this.gameInteractionService = new GameInteractionService(page);
+export class GameService extends BaseGameService {
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'GameService', loggerInstance || logger);
   }
 
-  // ==================== DELEGATION METHODS ====================
+  // ============ ОСНОВНЫЕ МЕТОДЫ ТЕСТИРОВАНИЯ ============
 
   /**
-   * Найти игру на странице по названию
+   * Универсальный метод для тестирования игры
    */
-  async findGameOnPage(title: string): Promise<boolean> {
-    return this.gameDetectionService.findGameOnPage(title);
-  }
-
-  /**
-   * Получить игру по индексу
-   */
-  async getGameByIndex(index: number): Promise<{ title: string; provider: string; locator: any } | null> {
-    return this.gameDetectionService.getGameByIndex(index);
-  }
-
-  /**
-   * Кликнуть по игре по индексу
-   */
-  async clickGameByIndex(index: number): Promise<boolean> {
-    return this.gameInteractionService.clickGameByIndex(index);
-  }
-
-  /**
-   * Запустить игру в реальном режиме по индексу
-   */
-  async playGameRealByIndex(index: number): Promise<boolean> {
-    return this.gameInteractionService.playGameRealByIndex(index);
-  }
-
-  /**
-   * Запустить игру в демо режиме по индексу
-   */
-  async playGameDemoByIndex(index: number): Promise<boolean> {
-    return this.gameInteractionService.playGameDemoByIndex(index);
-  }
-
-  /**
-   * Получить все игры на странице с их индексами
-   */
-  async getAllGamesWithIndexes(): Promise<Array<{ index: number; title: string; provider: string; locator: any }>> {
-    return this.gameDetectionService.getAllGamesWithIndexes();
-  }
-
-  /**
-   * Добавить игру в избранное по индексу
-   */
-  async addToFavoritesByIndex(index: number): Promise<boolean> {
-    return this.gameInteractionService.addToFavoritesByIndex(index);
-  }
-
-  /**
-   * Удалить игру из избранного по индексу
-   */
-  async removeFromFavoritesByIndex(index: number): Promise<boolean> {
-    return this.gameInteractionService.removeFromFavoritesByIndex(index);
-  }
-
-  /**
-   * Проверить, является ли игра избранной по индексу
-   */
-  async isGameFavoriteByIndex(index: number): Promise<boolean> {
-    return this.gameInteractionService.isGameFavoriteByIndex(index);
-  }
-
-  /**
-   * Универсальная функция для клика по кнопке игры по индексу
-   */
-  async clickGameButtonByIndex(index: number, buttonType: 'real' | 'demo' | 'favorite'): Promise<boolean> {
-    return this.gameInteractionService.clickGameButtonByIndex(index, buttonType);
-  }
-
-  /**
-   * Проверить доступность кнопки по индексу
-   */
-  async isButtonAvailableByIndex(index: number, buttonType: 'real' | 'demo' | 'favorite'): Promise<boolean> {
-    return this.gameInteractionService.isButtonAvailableByIndex(index, buttonType);
-  }
-
-  /**
-   * Найти игру по индексу с фильтром по провайдеру
-   */
-  async findGameByIndexWithProvider(
-    index: number, 
-    providerName: string
-  ): Promise<{ title: string; provider: string; locator: any } | null> {
-    return this.gameDetectionService.findGameByIndexWithProvider(index, providerName);
-  }
-
-  /**
-   * Получить игры по провайдеру с индексами
-   */
-  async getGamesByProviderWithIndexes(
-    providerName: string
-  ): Promise<Array<{ index: number; title: string; provider: string; locator: any }>> {
-    return this.gameDetectionService.getGamesByProviderWithIndexes(providerName);
-  }
-
-  /**
-   * Получить случайную игру по индексу
-   */
-  async getRandomGameByIndex(): Promise<{ index: number; title: string; provider: string; locator: any } | null> {
-    return this.gameDetectionService.getRandomGameByIndex();
-  }
-
-  /**
-   * Получить игры по диапазону индексов
-   */
-  async getGamesByIndexRange(
-    startIndex: number, 
-    endIndex: number
-  ): Promise<Array<{ index: number; title: string; provider: string; locator: any }>> {
-    return this.gameDetectionService.getGamesByIndexRange(startIndex, endIndex);
-  }
-
-  /**
-   * Кликнуть по игре на странице
-   */
-  async clickGameOnPage(title: string): Promise<boolean> {
-    return this.gameInteractionService.clickGameOnPage(title);
-  }
-
-  /**
-   * Запустить игру в демо режиме
-   */
-  async playGameDemo(title: string): Promise<boolean> {
-    return this.gameInteractionService.playGameDemo(title);
-  }
-
-  /**
-   * Запустить игру в реальном режиме
-   */
-  async playGameReal(title: string): Promise<boolean> {
-    return this.gameInteractionService.playGameReal(title);
-  }
-
-  /**
-   * Добавить игру в избранное
-   */
-  async addToFavorites(title: string): Promise<boolean> {
-    return this.gameInteractionService.addToFavorites(title);
-  }
-
-  /**
-   * Удалить игру из избранного
-   */
-  async removeFromFavorites(title: string): Promise<boolean> {
-    return this.gameInteractionService.removeFromFavorites(title);
-  }
-
-  /**
-   * Проверить, является ли игра избранной
-   */
-  async isGameFavorite(title: string): Promise<boolean> {
-    return this.gameInteractionService.isGameFavorite(title);
-  }
-
-  /**
-   * Поиск игр по запросу
-   */
-  async searchGames(query: string): Promise<boolean> {
-    return this.gameDetectionService.searchGames(query);
-  }
-
-  /**
-   * Фильтр по категории
-   */
-  async filterByCategory(categoryName: string): Promise<boolean> {
-    return this.gameDetectionService.filterByCategory(categoryName);
-  }
-
-  /**
-   * Фильтр по провайдеру
-   */
-  async filterByProvider(providerName: string): Promise<boolean> {
-    return this.gameDetectionService.filterByProvider(providerName);
-  }
-
-  /**
-   * Получить количество игр на странице
-   */
-  async getGamesCount(): Promise<number> {
-    return this.gameDetectionService.getGamesCount();
-  }
-
-  /**
-   * Получить список названий игр на странице
-   */
-  async getGamesTitles(): Promise<string[]> {
-    return this.gameDetectionService.getGamesTitles();
-  }
-
-  /**
-   * Проверить, есть ли игры на странице
-   */
-  async hasGames(): Promise<boolean> {
-    return this.gameDetectionService.hasGames();
-  }
-
-  /**
-   * Дождаться загрузки игр
-   */
-  async waitForGamesLoad(): Promise<void> {
-    return this.gameDetectionService.waitForGamesLoad();
-  }
-
-  /**
-   * Очистить поиск
-   */
-  async clearSearch(): Promise<void> {
-    return this.gameDetectionService.clearSearch();
-  }
-
-  /**
-   * Сбросить все фильтры
-   */
-  async resetFilters(): Promise<void> {
-    return this.gameDetectionService.resetFilters();
-  }
-
-  /**
-   * Универсальный метод для открытия игры с полной проверкой
-   */
-  async openGameWithFullCheck(gameTitle: string, providerName?: string): Promise<void> {
-    this.logStep(`Opening game with full check: ${gameTitle}`);
-    
-    try {
-      // 1. Кликаем на кнопку "Реальний"
-      await this.gameInteractionService.clickRealButton(gameTitle, providerName);
-      
-      // 2. Ждем загрузки URL
-      await this.gameUrlService.waitForGameUrl(15000);
-      
-      // 3. Валидируем URL
-      const urlValidation = await this.gameUrlService.validateGameUrl(gameTitle);
-      if (!urlValidation.isValid) {
-        throw new Error(urlValidation.errorMessage || 'URL validation failed');
-      }
-      
-      // 4. Проверяем iframe
-      const iframe = this.page.locator('#fullscreen-container iframe');
-      await expect(iframe).toBeVisible();
-      
-      // 5. Проверяем все возможные ошибки
-      await this.checkAllGameErrors(gameTitle);
-      
-      // 6. Проверяем canvas
-      await this.verifyGameCanvas(iframe);
-      
-      // 7. Финальная проверка URL
-      const currentUrl = this.page.url();
-      const gameSlug = this.gameUrlService.createGameSlug(gameTitle);
-      await expect(currentUrl).toContain(gameSlug);
-      
-      this.logSuccess(`Game opened successfully: ${gameTitle}`);
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logError(`Failed to open game ${gameTitle}: ${errorMessage}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Клик по кнопке "Реальний" для конкретной игры (упрощенная версия)
-   */
-  async clickRealButton(gameTitle: string, providerName?: string): Promise<void> {
-    return this.openGameWithFullCheck(gameTitle, providerName);
-  }
-
-  /**
-   * Проверка всех возможных ошибок игры
-   */
-  private async checkAllGameErrors(gameTitle: string): Promise<void> {
-    // Проверяем на блокировку по IP
-    const isIpBlocked = await this.gameErrorService.checkForIpBlocking(gameTitle);
-    if (isIpBlocked) {
-      this.logSuccess(`✅ Game "${gameTitle}" is blocked by IP location - test passed (expected behavior)`);
-      return;
-    }
-    
-    // Проверяем на валютные ограничения
-    const currencyRestriction = await this.gameErrorService.checkForCurrencyRestriction(gameTitle);
-    if (currencyRestriction.hasError) {
-      this.logError(`❌ Currency restriction detected for game "${gameTitle}": ${currencyRestriction.errorDetails}`);
-      throw new Error(`Currency restriction: ${currencyRestriction.errorDetails}`);
-    }
-    
-    // Проверяем на ошибку блокировки браузером
-    const browserBlocking = await this.gameErrorService.checkForBrowserBlocking(gameTitle);
-    if (browserBlocking.hasError) {
-      this.logError(`❌ Browser blocking error detected for game "${gameTitle}": ${browserBlocking.errorDetails}`);
-      throw new Error(`Browser blocking error: ${browserBlocking.errorDetails}`);
-    }
-      
-    // Проверяем на 500 ошибку сервера
-    const serverError = await this.gameErrorService.checkForServerError(gameTitle);
-    if (serverError.hasError) {
-      this.logError(`❌ Server error detected for game "${gameTitle}": ${serverError.errorDetails}`);
-      throw new Error(`Server error: ${serverError.errorDetails}`);
-    }
-      
-    // Проверяем на ошибки стабильности игры
-    const stabilityError = await this.gameErrorService.checkForStabilityErrors(gameTitle);
-    if (stabilityError.hasError) {
-      this.logError(`❌ Game stability error detected for game "${gameTitle}": ${stabilityError.errorDetails}`);
-      throw new Error(`Game stability error: ${stabilityError.errorDetails}`);
-    }
-  }
-
-  /**
-   * Проверка canvas внутри iframe
-   */
-  private async verifyGameCanvas(iframe: any): Promise<void> {
-    const iframeContent = iframe.contentFrame();
-    if (!iframeContent) {
-      throw new Error('Iframe content not accessible');
-    }
-    
-      // Ждем загрузки содержимого iframe
-      await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-    await this.page.waitForTimeout(3000);
-        
-    // Проверяем canvas с различными селекторами
-        const canvasSelectors = [
-          'canvas',
-          'canvas[width]',
-          'canvas[height]',
-          'canvas:not([width="0"])',
-      'canvas:not([height="0"])',
-      '#__canvas_wrapper__ canvas',
-      'div[id*="canvas"] canvas',
-      'div[class*="canvas"] canvas',
-      '#hud-canvas',
-      'canvas[id*="hud"]',
-      'canvas[id*="game"]',
-      '#game-holder canvas'
-        ];
-        
-        let canvasFound = false;
-    
-        for (const selector of canvasSelectors) {
-      try {
-          const canvas = iframeContent.locator(selector).first();
-        const isVisible = await canvas.isVisible({ timeout: 1000 });
-        
-          if (isVisible) {
-          const width = await canvas.getAttribute('width').catch(() => 'unknown');
-          const height = await canvas.getAttribute('height').catch(() => 'unknown');
-          this.logSuccess(`Canvas found with selector: ${selector} (width=${width}, height=${height})`);
-            canvasFound = true;
-            break;
-        }
-      } catch (error) {
-        continue;
-          }
-        }
-        
-        if (!canvasFound) {
-      // Проверяем альтернативные индикаторы
-      await this.checkAlternativeGameIndicators(iframeContent);
-    }
-  }
-
-  /**
-   * Проверка альтернативных индикаторов игры
-   */
-  private async checkAlternativeGameIndicators(iframeContent: any): Promise<void> {
-    this.logStep('Canvas not found, checking alternative game indicators...');
-    
-          const gameIndicators = [
-      '#__canvas_wrapper__',
-      'div[id*="canvas"]',
-            'div[class*="canvas"]',
-            'div[id*="game"]',
-      'div[class*="game"]',
-      'div[id*="app"]',
-      'div[class*="app"]',
-      'div[id="root"]',
-      'div[id="app-content"]',
-      '#game-holder',
-      '#hud-canvas',
-      'canvas[id*="hud"]',
-      'canvas[id*="game"]'
-          ];
-          
-          let gameElementFound = false;
-    
-          for (const selector of gameIndicators) {
-      try {
-            const elements = await iframeContent.locator(selector).all();
-            if (elements.length > 0) {
-          const isVisible = await elements[0].isVisible().catch(() => false);
-          if (isVisible) {
-            this.logStep(`Found game element with selector: ${selector}`);
-              gameElementFound = true;
-              break;
-          }
-        }
-      } catch (error) {
-        continue;
-      }
-    }
-    
-    // Проверяем содержимое body на наличие ошибок
-    const bodyText = await iframeContent.locator('body').textContent().catch(() => '');
-    
-    if (bodyText?.includes('Something went wrong') || 
-        bodyText?.includes('Hardware Acceleration is disabled') ||
-              bodyText?.includes('Please enable it to continue')) {
-      this.logStep('Game shows hardware acceleration warning, but iframe is loaded - considering as successful');
-            gameElementFound = true;
-          }
-          
-          if (!gameElementFound) {
-      throw new Error(
-        'Canvas not found inside iframe and no alternative game elements detected. ' +
-        `Body content: ${bodyText?.substring(0, 200)}...`
-      );
-          }
-          
-          this.logSuccess('Game loaded successfully (alternative indicators found)');
-  }
-
-  /**
-   * Проверить стабильность игры - что iframe остается открытым в течение указанного времени
-   */
-  async checkGameStability(gameTitle: string, durationSeconds: number = 15): Promise<boolean> {
-    return this.gameStabilityService.checkGameStability(gameTitle, durationSeconds);
-  }
-
-  /**
-   * Клик по кнопке "Демо" для конкретной игры
-   */
-  async clickDemoButton(gameTitle: string): Promise<void> {
-    return this.gameInteractionService.clickDemoButton(gameTitle);
-  }
-
-  /**
-   * Универсальная функция для клика по кнопке игры
-   */
-  async clickGameButton(gameTitle: string, buttonType: 'real' | 'demo'): Promise<void> {
-    return this.gameInteractionService.clickGameButton(gameTitle, buttonType);
-  }
-
-  /**
-   * Мониторинг стабильности игры в течение указанного времени
-   */
-  async monitorGameStability(
-    gameTitle: string, 
-    gameSlug?: string, 
-    durationSeconds: number = 15, 
-    checkIntervalSeconds: number = 5
-  ): Promise<{ isStable: boolean; failureReason?: string }> {
-    return this.gameStabilityService.monitorGameStability(gameTitle, gameSlug, durationSeconds, checkIntervalSeconds);
-  }
-
-  /**
-   * Быстрая проверка стабильности игры (5 секунд)
-   */
-  async quickStabilityCheck(
-    gameTitle: string, 
-    gameSlug?: string
-  ): Promise<{ isStable: boolean; failureReason?: string }> {
-    return this.gameStabilityService.quickStabilityCheck(gameTitle, gameSlug);
-  }
-
-  /**
-   * Расширенная проверка стабильности игры (15 секунд)
-   */
-  async extendedStabilityCheck(
-    gameTitle: string, 
-    gameSlug?: string
-  ): Promise<{ isStable: boolean; failureReason?: string }> {
-    return this.gameStabilityService.extendedStabilityCheck(gameTitle, gameSlug);
-  }
-
-  /**
-   * Тестирование игры с полной проверкой ошибок (IP блокировка + серверные ошибки)
-   */
-  async testGameWithErrorHandling(
-    gameTitle: string, 
-    providerName?: string
-  ): Promise<{ success: boolean; errorType?: string; errorDetails?: string }> {
-    this.logStep(`Testing game with error handling: ${gameTitle}`);
+  async testGameUniversal(gameTitle: string, providerName?: string): Promise<GameTestResult> {
+    this.logStep(`Universal game test: ${gameTitle}`);
     
     try {
       // Применяем фильтр по провайдеру, если указан
       if (providerName) {
-        this.logStep(`Applying provider filter: ${providerName}`);
         await this.filterByProvider(providerName);
-        await this.page.waitForTimeout(2000);
+        await this.waitForTimeout(2000);
       }
       
-      // Находим игру по названию
-      const gameCard = this.page.locator('.game-card').filter({ hasText: gameTitle }).first();
-      await gameCard.waitFor({ state: 'visible', timeout: 5000 });
-      
-      // Наводим курсор на игру для появления кнопок
-      await gameCard.hover();
-      
-      // Ждем появления кнопки "Реальний"
-      const realButton = gameCard.locator('.btn-default').filter({ hasText: 'Реальний' });
-      await realButton.waitFor({ state: 'visible', timeout: 3000 });
-      
-      // Кликаем на кнопку "Реальний"
-      await realButton.click();
-      
-      // Ждем возможного модального окна авторизации
-      try {
-        await this.page.waitForSelector('#modal-auth', { state: 'visible', timeout: 5000 });
-        this.logStep('Authorization modal appeared, waiting for it to close');
-        await this.page.waitForSelector('#modal-auth', { state: 'hidden', timeout: 10000 });
-        this.logStep('Authorization modal closed');
-      } catch (error) {
-        this.logStep('No authorization modal appeared');
+      // Находим игру
+      const gameInfo = await this.findGameByTitle(gameTitle);
+      if (!gameInfo) {
+        return {
+          success: false,
+          errorType: GameErrorType.GAME_NOT_FOUND,
+          errorDetails: `Game not found: ${gameTitle}`
+        };
       }
       
-      // Ждем загрузки игры
-      try {
-        await this.page.waitForURL('**/play/real/**', { timeout: 15000 });
-        this.logStep('Game URL loaded successfully');
-      } catch (error) {
-        this.logStep('Game URL did not change, checking current URL');
-      }
-      
-      // Проверяем iframe
-      const iframe = this.page.locator('#fullscreen-container iframe');
-      await expect(iframe).toBeVisible();
-      
-      // Проверяем на IP блокировку
-      const isIpBlocked = await this.gameErrorService.checkForIpBlocking(gameTitle);
-      if (isIpBlocked) {
-        this.logSuccess(`✅ Game "${gameTitle}" is blocked by IP location - test passed (expected behavior)`);
-        return { success: true, errorType: 'IP_BLOCKED', errorDetails: 'Game blocked by IP location' };
-      }
-      
-      // Проверяем на ошибку блокировки браузером
-      const browserBlocking = await this.gameErrorService.checkForBrowserBlocking(gameTitle);
-      if (browserBlocking.hasError) {
-        this.logError(`❌ Browser blocking error detected for game "${gameTitle}": ${browserBlocking.errorDetails}`);
-        return { success: false, errorType: 'BROWSER_BLOCKING', errorDetails: browserBlocking.errorDetails };
-      }
-      
-      // Проверяем на серверную ошибку
-      const serverError = await this.gameErrorService.checkForServerError(gameTitle);
-      if (serverError.hasError) {
-        this.logError(`❌ Server error detected for game "${gameTitle}": ${serverError.errorDetails}`);
-        return { success: false, errorType: 'SERVER_ERROR', errorDetails: serverError.errorDetails };
-      }
-      
-      // Проверяем canvas (признак загруженной игры)
-      const iframeContent = iframe.contentFrame();
-      if (iframeContent) {
-        await expect(iframeContent.locator('canvas').first()).toBeVisible();
-      }
-      
-      this.logSuccess(`✅ Game "${gameTitle}" opened successfully without errors`);
-      return { success: true };
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logError(`Failed to test game "${gameTitle}": ${errorMessage}`);
-      return { success: false, errorType: 'UNKNOWN_ERROR', errorDetails: errorMessage };
-    }
-  }
-
-  // ==================== ERROR CHECKING METHODS ====================
-
-  /**
-   * Проверка на ошибку блокировки браузером (ERR_BLOCKED_BY_RESPONSE)
-   */
-  async checkForBrowserBlocking(gameTitle: string): Promise<{ hasError: boolean; errorDetails?: string }> {
-    return this.gameErrorService.checkForBrowserBlocking(gameTitle);
-  }
-
-  /**
-   * Проверка на 500 ошибку сервера при открытии игры
-   */
-  async checkForServerError(gameTitle: string): Promise<{ hasError: boolean; errorDetails?: string }> {
-    return this.gameErrorService.checkForServerError(gameTitle);
-  }
-
-  /**
-   * Проверка на блокировку по IP от поставщика игр (403 Forbidden)
-   */
-  async checkForIpBlocking(gameTitle: string): Promise<boolean> {
-    return this.gameErrorService.checkForIpBlocking(gameTitle);
-  }
-
-  /**
-   * Проверка на валютные ограничения (Currency restriction)
-   */
-  async checkForCurrencyRestriction(gameTitle: string): Promise<{ hasError: boolean; errorDetails?: string }> {
-    return this.gameErrorService.checkForCurrencyRestriction(gameTitle);
-  }
-
-  /**
-   * Проверка на ошибки стабильности игры
-   */
-  async checkForStabilityErrors(gameTitle: string): Promise<{ hasError: boolean; errorDetails?: string }> {
-    return this.gameErrorService.checkForStabilityErrors(gameTitle);
-  }
-
-  // ==================== UNIVERSAL TEST METHODS ====================
-
-  /**
-   * Универсальный метод для тестирования игры с обработкой всех ошибок
-   */
-  async testGameUniversal(gameTitle: string, providerName?: string): Promise<{ 
-    success: boolean; 
-    errorType?: string; 
-    errorDetails?: string;
-    gameData?: { title: string; provider: string }
-  }> {
-    this.logStep(`Universal game test: ${gameTitle}`);
-    
-    try {
-      
-      // Открываем игру с полной проверкой
+      // Открываем игру
       await this.openGameWithFullCheck(gameTitle, providerName);
       
-      this.logSuccess(`✅ Game "${gameTitle}" opened successfully without errors`);
+      this.logSuccess(`✅ Game "${gameTitle}" opened successfully`);
       return { 
-        success: true
+        success: true,
+        gameData: gameInfo
       };
       
     } catch (error) {
@@ -661,104 +53,24 @@ export class GameService extends BaseService {
       this.logError(`Failed to test game "${gameTitle}": ${errorMessage}`);
       
       // Определяем тип ошибки
-      let errorType = 'UNKNOWN_ERROR';
-      if (errorMessage.includes('Currency restriction')) errorType = 'CURRENCY_RESTRICTION';
-      else if (errorMessage.includes('Browser blocking')) errorType = 'BROWSER_BLOCKING';
-      else if (errorMessage.includes('Server error')) errorType = 'SERVER_ERROR';
-      else if (errorMessage.includes('IP location is not allowed')) errorType = 'IP_BLOCKED';
-      else if (errorMessage.includes('Game stability')) errorType = 'STABILITY_ERROR';
+      const errorType = this.determineErrorType(errorMessage);
       
       return { 
         success: false, 
         errorType, 
         errorDetails: errorMessage
       };
-    }
-  }
-
-  /**
-   * Универсальный метод для тестирования игры по индексу
-   */
-  async testGameByIndexUniversal(index: number, providerName?: string): Promise<{ 
-    success: boolean; 
-    errorType?: string; 
-    errorDetails?: string;
-    gameData?: { title: string; provider: string }
-  }> {
-    this.logStep(`Universal game test by index: ${index}`);
-    
-    try {
-      // Получаем информацию об игре по индексу
-      const gameData = await this.gameDetectionService.getGameByIndex(index);
-      
-      if (!gameData) {
-        throw new Error(`Game not found at index ${index}`);
-      }
-      
-      // Открываем игру с полной проверкой
-      await this.openGameWithFullCheck(gameData.title, providerName);
-      
-      this.logSuccess(`✅ Game at index ${index} opened successfully: ${gameData.title}`);
-      return { 
-        success: true, 
-        gameData: { title: gameData.title, provider: gameData.provider }
-      };
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logError(`Failed to test game at index ${index}: ${errorMessage}`);
-      
-      // Определяем тип ошибки
-      let errorType = 'UNKNOWN_ERROR';
-      if (errorMessage.includes('Currency restriction')) errorType = 'CURRENCY_RESTRICTION';
-      else if (errorMessage.includes('Browser blocking')) errorType = 'BROWSER_BLOCKING';
-      else if (errorMessage.includes('Server error')) errorType = 'SERVER_ERROR';
-      else if (errorMessage.includes('IP location is not allowed')) errorType = 'IP_BLOCKED';
-      else if (errorMessage.includes('Game stability')) errorType = 'STABILITY_ERROR';
-      
-      return { 
-        success: false, 
-        errorType, 
-        errorDetails: errorMessage
-      };
-    }
-  }
-
-  /**
-   * Универсальный метод для быстрого тестирования игры (без полной проверки)
-   */
-  async testGameQuick(gameTitle: string, providerName?: string): Promise<boolean> {
-    this.logStep(`Quick game test: ${gameTitle}`);
-    
-    try {
-      // Только кликаем и проверяем базовые вещи
-      await this.gameInteractionService.clickRealButton(gameTitle, providerName);
-      await this.gameUrlService.waitForGameUrl(10000);
-      
-      const iframe = this.page.locator('#fullscreen-container iframe');
-      await expect(iframe).toBeVisible();
-      
-      this.logSuccess(`✅ Quick test passed for game: ${gameTitle}`);
-      return true;
-
-    } catch (error) {
-      this.logError(`Quick test failed for game ${gameTitle}: ${error}`);
-      return false;
     }
   }
 
   /**
    * Универсальный метод для тестирования стабильности игры
    */
-  async testGameStabilityUniversal(gameTitle: string, durationSeconds: number = 15): Promise<{ 
-    isStable: boolean; 
-    failureReason?: string;
-    duration: number;
-  }> {
+  async testGameStabilityUniversal(gameTitle: string, durationSeconds: number = 15): Promise<GameStabilityResult> {
     this.logStep(`Universal stability test: ${gameTitle} (${durationSeconds}s)`);
     
     try {
-      const result = await this.gameStabilityService.extendedStabilityCheck(gameTitle);
+      const result = await this.monitorGameStability(gameTitle, durationSeconds);
       
       this.logStep(`Stability test completed: ${result.isStable ? 'STABLE' : 'UNSTABLE'}`);
       return {
@@ -778,58 +90,357 @@ export class GameService extends BaseService {
     }
   }
 
-  /**
-   * Универсальный метод для получения всех игр с возможностью фильтрации
-   */
-  async getAllGamesUniversal(providerName?: string): Promise<Array<{ 
-    index: number; 
-    title: string; 
-    provider: string; 
-    locator: any 
-  }>> {
-    this.logStep(`Getting all games${providerName ? ` for provider: ${providerName}` : ''}`);
+  // ============ МЕТОДЫ ОБНАРУЖЕНИЯ ИГР ============
+
+  async getAllGamesWithIndexes(): Promise<GameInfo[]> {
+    this.logStep('Getting all games with indexes');
     
     try {
-      if (providerName) {
-        return await this.gameDetectionService.getGamesByProviderWithIndexes(providerName);
-      } else {
-        return await this.gameDetectionService.getAllGamesWithIndexes();
+      await this.waitForGamesToLoad();
+      const cards = await this.gameCards.all();
+      const games: GameInfo[] = [];
+
+      const maxGames = Math.min(cards.length, this.constants.LIMITS.MAX_GAMES);
+      
+      for (let i = 0; i < maxGames; i++) {
+        try {
+          const gameInfo = await this.extractGameInfo(cards[i], i);
+          if (gameInfo) {
+            games.push(gameInfo);
+          }
+        } catch (error) {
+          this.logStep(`Skipping game at index ${i} due to error`);
+          continue;
+        }
       }
+
+      this.logSuccess(`Found ${games.length} games`);
+      return games;
     } catch (error) {
-      this.logError(`Failed to get games: ${error}`);
+      this.logError('Failed to get all games', error);
       return [];
     }
   }
 
-  /**
-   * Универсальный метод для поиска игры
-   */
-  async findGameUniversal(searchTerm: string, providerName?: string): Promise<{ 
-    found: boolean; 
-    gameData?: { index: number; title: string; provider: string; locator: any };
-    allGames?: Array<{ index: number; title: string; provider: string; locator: any }>
-  }> {
-    this.logStep(`Universal game search: ${searchTerm}`);
+  async getGamesCount(): Promise<number> {
+    try {
+      await this.waitForGamesToLoad();
+      const count = await this.gameCards.count();
+      this.logStep(`Games count: ${count}`);
+      return count;
+    } catch (error) {
+      this.logError('Failed to get games count', error);
+      return 0;
+    }
+  }
+
+  async getGameByIndex(index: number): Promise<GameInfo | null> {
+    this.logStep(`Getting game by index: ${index}`);
     
     try {
-      const allGames = await this.getAllGamesUniversal(providerName);
+      await this.waitForGamesToLoad();
+      const cards = await this.gameCards.all();
       
-      // Ищем игру по названию
-      const foundGame = allGames.find(game => 
-        game.title.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      
-      if (foundGame) {
-        this.logSuccess(`Game found: ${foundGame.title} at index ${foundGame.index}`);
-        return { found: true, gameData: foundGame, allGames };
-      } else {
-        this.logStep(`Game not found: ${searchTerm}`);
-        return { found: false, allGames };
+      if (index >= 0 && index < cards.length) {
+        const gameInfo = await this.extractGameInfo(cards[index], index);
+        this.logSuccess(`Game at index ${index}: ${gameInfo?.title || 'Unknown'}`);
+        return gameInfo;
       }
+      
+      this.logStep(`Game not found at index: ${index}`);
+      return null;
+    } catch (error) {
+      this.logError(`Failed to get game by index: ${index}`, error);
+      return null;
+    }
+  }
+
+  async findGameByTitle(title: string, provider?: string): Promise<GameInfo | null> {
+    this.logStep(`Finding game by title: ${title}${provider ? ` (provider: ${provider})` : ''}`);
+    
+    try {
+      const games = await this.getAllGamesWithIndexes();
+      
+      for (const game of games) {
+        const titleMatch = game.title.toLowerCase().includes(title.toLowerCase());
+        const providerMatch = !provider || game.provider.toLowerCase().includes(provider.toLowerCase());
+        
+        if (titleMatch && providerMatch) {
+          this.logSuccess(`Game found: ${game.title} by ${game.provider}`);
+          return game;
+        }
+      }
+      
+      this.logStep(`Game not found: ${title}`);
+      return null;
+    } catch (error) {
+      this.logError(`Failed to find game by title: ${title}`, error);
+      return null;
+    }
+  }
+
+  // ============ МЕТОДЫ ВЗАИМОДЕЙСТВИЯ ============
+
+  async clickGameByIndex(index: number): Promise<void> {
+    this.logStep(`Clicking game at index: ${index}`);
+    
+    try {
+      const card = this.gameCards.nth(index);
+      await card.click();
+      this.logSuccess(`Game clicked at index: ${index}`);
+    } catch (error) {
+      this.logError(`Failed to click game at index: ${index}`, error);
+      throw error;
+    }
+  }
+
+  async clickPlayButtonByIndex(index: number): Promise<void> {
+    this.logStep(`Clicking play button at index: ${index}`);
+    
+    try {
+      const playBtn = this.playButton.nth(index);
+      await playBtn.click();
+      this.logSuccess(`Play button clicked at index: ${index}`);
+    } catch (error) {
+      this.logError(`Failed to click play button at index: ${index}`, error);
+      throw error;
+    }
+  }
+
+  async clickDemoButtonByIndex(index: number): Promise<void> {
+    this.logStep(`Clicking demo button at index: ${index}`);
+    
+    try {
+      const demoBtn = this.demoButton.nth(index);
+      await demoBtn.click();
+      this.logSuccess(`Demo button clicked at index: ${index}`);
+    } catch (error) {
+      this.logError(`Failed to click demo button at index: ${index}`, error);
+      throw error;
+    }
+  }
+
+  // ============ МЕТОДЫ ВАЛИДАЦИИ ============
+
+  async validateGameUrl(url: string): Promise<boolean> {
+    return await this.validateUrlPattern(url);
+  }
+
+  async checkGameElements(): Promise<boolean> {
+    return await this.validateGameElements();
+  }
+
+  async closeGameIframe(): Promise<void> {
+    this.logStep('Closing game iframe');
+    
+    try {
+      for (const selector of this.selectors.CLOSE_BUTTONS) {
+        const closeButton = this.page.locator(selector);
+        if (await closeButton.isVisible()) {
+          await closeButton.click();
+          this.logSuccess('Game iframe closed');
+          return;
+        }
+      }
+      
+      // Если нет кнопки закрытия, нажимаем Escape
+      await this.page.keyboard.press('Escape');
+      this.logSuccess('Game iframe closed with Escape key');
+    } catch (error) {
+      this.logError('Failed to close game iframe', error);
+      throw error;
+    }
+  }
+
+  // ============ МЕТОДЫ ФИЛЬТРАЦИИ ============
+
+  async filterByProvider(providerName: string): Promise<void> {
+    this.logStep(`Filtering by provider: ${providerName}`);
+    
+    try {
+      const providerDropdown = this.page.locator(this.selectors.PROVIDER_DROPDOWN);
+      await providerDropdown.click();
+      
+      const providerSearch = providerDropdown.locator('input[type="search"]');
+      await providerSearch.fill(providerName);
+      
+      const providerItem = this.page.locator(this.selectors.getProviderByName(providerName));
+      await providerItem.click();
+      
+      await this.waitForGamesToLoad();
+      this.logSuccess(`Filtered by provider: ${providerName}`);
+    } catch (error) {
+      this.logError(`Failed to filter by provider: ${providerName}`, error);
+      throw error;
+    }
+  }
+
+  // ============ ПРИВАТНЫЕ МЕТОДЫ ============
+
+  private async openGameWithFullCheck(gameTitle: string): Promise<void> {
+    this.logStep(`Opening game with full check: ${gameTitle}`);
+    
+    try {
+      // Находим игру
+      const gameCard = this.page.locator(this.selectors.getGameByTitle(gameTitle));
+      await gameCard.waitFor({ state: 'visible', timeout: 5000 });
+      
+      // Наводим курсор на игру
+      await gameCard.hover();
+      
+      // Кликаем на кнопку "Реальний"
+      const realButton = gameCard.locator(this.selectors.REAL_BUTTON);
+      await realButton.waitFor({ state: 'visible', timeout: 3000 });
+      await realButton.click();
+      
+      // Ждем загрузки iframe
+      await this.waitForIframeToLoad();
+      
+      // Проверяем все возможные ошибки
+      await this.checkAllGameErrors(gameTitle);
+      
+      // Проверяем canvas
+      await this.verifyGameCanvas();
+      
+      this.logSuccess(`Game opened successfully: ${gameTitle}`);
 
     } catch (error) {
-      this.logError(`Search failed: ${error}`);
-      return { found: false };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logError(`Failed to open game ${gameTitle}: ${errorMessage}`);
+      throw error;
     }
+  }
+
+  private async checkAllGameErrors(gameTitle: string): Promise<void> {
+    // Проверяем на IP блокировку
+    const isIpBlocked = await this.checkForSpecificError(this.constants.ERROR_TYPES.IP_BLOCKED);
+    if (isIpBlocked) {
+      this.logSuccess(`✅ Game "${gameTitle}" is blocked by IP location - test passed (expected behavior)`);
+      return;
+    }
+    
+    // Проверяем на валютные ограничения
+    const currencyRestriction = await this.checkForSpecificError(this.constants.ERROR_TYPES.CURRENCY_RESTRICTION);
+    if (currencyRestriction) {
+      this.logError(`❌ Currency restriction detected for game "${gameTitle}"`);
+      throw new Error('Currency restriction detected');
+    }
+    
+    // Проверяем на ошибку блокировки браузером
+    const browserBlocking = await this.checkForSpecificError(this.constants.ERROR_TYPES.BROWSER_BLOCKING);
+    if (browserBlocking) {
+      this.logError(`❌ Browser blocking error detected for game "${gameTitle}"`);
+      throw new Error('Browser blocking error detected');
+    }
+      
+    // Проверяем на 500 ошибку сервера
+    const serverError = await this.checkForSpecificError(this.constants.ERROR_TYPES.SERVER_ERROR);
+    if (serverError) {
+      this.logError(`❌ Server error detected for game "${gameTitle}"`);
+      throw new Error('Server error detected');
+    }
+  }
+
+  private async verifyGameCanvas(): Promise<void> {
+    const canvasFound = await this.checkCanvasWithMultipleSelectors();
+    if (!canvasFound) {
+      const gameIndicatorsFound = await this.checkGameIndicators();
+      if (!gameIndicatorsFound) {
+        throw new Error('Canvas not found inside iframe and no alternative game elements detected');
+      }
+    }
+  }
+
+  private async monitorGameStability(gameTitle: string, durationSeconds: number): Promise<{ isStable: boolean; failureReason?: string }> {
+    this.logStep(`Monitoring game stability: ${gameTitle} for ${durationSeconds}s`);
+    
+    const startTime = Date.now();
+    const checkInterval = this.constants.TIMEOUTS.STABILITY_CHECK;
+    const maxChecks = Math.floor(durationSeconds * 1000 / checkInterval);
+    
+    try {
+      for (let i = 0; i < maxChecks; i++) {
+        await this.waitForTimeout(checkInterval);
+        
+        // Проверяем, что iframe все еще видим
+        const iframeVisible = await this.isIframeVisible();
+        if (!iframeVisible) {
+          const duration = (Date.now() - startTime) / 1000;
+          return {
+            isStable: false,
+            failureReason: `Game iframe disappeared after ${duration}s`
+          };
+        }
+
+        // Проверяем на ошибки
+        const errorCheck = await this.checkForErrorsInIframe();
+        if (errorCheck.hasError) {
+          const duration = (Date.now() - startTime) / 1000;
+          return {
+            isStable: false,
+            failureReason: `Game errors detected after ${duration}s: ${errorCheck.errorText}`
+          };
+        }
+
+        // Проверяем URL (если изменился, игра могла закрыться)
+        const currentUrl = this.getCurrentUrl();
+        if (!currentUrl.includes(this.constants.URL_PATTERNS.GAME_PLAY)) {
+          return {
+            isStable: false,
+            failureReason: `Game URL changed after ${(Date.now() - startTime) / 1000}s`
+          };
+        }
+      }
+
+      const duration = (Date.now() - startTime) / 1000;
+      this.logSuccess(`Game stability check passed: ${duration}s`);
+      return { isStable: true };
+      
+    } catch (error) {
+      const duration = (Date.now() - startTime) / 1000;
+      this.logError(`Game stability check failed: ${error}`, error);
+      return {
+        isStable: false,
+        failureReason: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private async extractGameInfo(card: Locator, index: number): Promise<GameInfo | null> {
+    try {
+      const title = await this.safeGetText(card.locator(this.selectors.GAME_TITLE));
+      const provider = await this.safeGetText(card.locator(this.selectors.GAME_PROVIDER));
+      const image = await this.safeGetAttribute(card.locator(this.selectors.GAME_IMAGE), 'src') || '';
+      
+      const hasPlayButton = await this.safeIsVisible(card.locator(this.selectors.PLAY_BUTTON));
+      const hasDemoButton = await this.safeIsVisible(card.locator(this.selectors.DEMO_BUTTON));
+
+      return {
+        index,
+        title: title.trim(),
+        provider: provider.trim(),
+        image,
+        hasPlayButton,
+        hasDemoButton,
+        locator: card,
+        type: GameType.SLOT,
+        status: GameStatus.LOADED
+      };
+    } catch (error) {
+      this.logError(`Failed to extract game info at index ${index}`, error);
+      return null;
+    }
+  }
+
+  private determineErrorType(errorMessage: string): GameErrorType {
+    if (errorMessage.includes('Currency restriction')) return GameErrorType.CURRENCY_RESTRICTION;
+    if (errorMessage.includes('Browser blocking')) return GameErrorType.BROWSER_BLOCKING;
+    if (errorMessage.includes('Server error')) return GameErrorType.SERVER_ERROR;
+    if (errorMessage.includes('IP location is not allowed')) return GameErrorType.IP_BLOCKED;
+    if (errorMessage.includes('Game stability')) return GameErrorType.STABILITY_ERROR;
+    if (errorMessage.includes('Game not found')) return GameErrorType.GAME_NOT_FOUND;
+    if (errorMessage.includes('URL')) return GameErrorType.URL_MISMATCH;
+    if (errorMessage.includes('iframe')) return GameErrorType.IFRAME_ERROR;
+    return GameErrorType.UNKNOWN_ERROR;
   }
 }

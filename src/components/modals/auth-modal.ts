@@ -3,15 +3,17 @@
  */
 
 import { Page, Locator } from '@playwright/test';
-import { BaseAuthModal } from '../../core/base-auth-modal';
+import { BaseComponent } from '@/core/abstract/base-component';
 import { HeaderComponent } from '@/components/header.component';
+import { ILogger } from '@/core/interfaces/logger.interface';
+// import { logger } from '@/core/logger';
 
-export class AuthModalComponent extends BaseAuthModal {
+export class AuthModalComponent extends BaseComponent {
   private readonly headerComponent: HeaderComponent;
 
-  constructor(page: Page) {
-    super(page, 'AuthModal');
-    this.headerComponent = new HeaderComponent(page);
+  constructor(page: Page, loggerInstance?: ILogger) {
+    super(page, 'AuthModal', '.modal-auth', loggerInstance);
+    this.headerComponent = new HeaderComponent(page, loggerInstance);
   }
 
   // Специфичные селекторы для авторизации
@@ -28,106 +30,96 @@ export class AuthModalComponent extends BaseAuthModal {
   }
 
   get passwordInputSelector(): Locator {
-    return this.page.locator('#password-login');
+    return this.page.locator('#password_login');
   }
 
   get loginButtonSelector(): Locator {
-    return this.page.locator('#tab-login .btn-default');
+    return this.page.locator('button[type="submit"]');
   }
 
-  get forgotPasswordSelector(): Locator {
-    return this.page.locator('a[wire\\:click="forgotPassword"]');
+  get registrationTabSelector(): Locator {
+    return this.page.locator('[data-tab="tab-registration"]');
   }
 
-  /**
-   * Открыть модальное окно авторизации
-   */
-  async open(): Promise<void> {
-    this.logStep('Opening auth modal');
-    await this.headerComponent.openLoginModal();
-    await this.waitForModalOpen();
-    this.logSuccess('Auth modal opened');
+  get emailRegistrationInputSelector(): Locator {
+    return this.page.locator('#email_registration');
   }
 
-  /**
-   * Закрыть модальное окно авторизации
-   */
-  async close(): Promise<void> {
-    this.logStep('Closing auth modal');
-    await this.closeByButton();
-    await this.waitForModalClose();
-    this.logSuccess('Auth modal closed');
+  get phoneRegistrationInputSelector(): Locator {
+    return this.page.locator('#registration-phone');
   }
 
-  /**
-   * Переключиться на таб входа
-   */
-  async switchToLoginTab(): Promise<void> {
-    this.logStep('Switching to login tab');
-    await this.headerComponent.openLoginModal();
-    await this.page.waitForSelector('#tab-login.active');
-    this.logSuccess('Switched to login tab');
+  get passwordRegistrationInputSelector(): Locator {
+    return this.page.locator('#password_registration');
   }
 
+  get confirmPasswordInputSelector(): Locator {
+    return this.page.locator('#confirm_password_registration');
+  }
 
-  /**
-   * Отправить форму входа
-   */
-  async submitLogin(): Promise<void> {
-    this.logStep('Submitting login form');
+  get registrationButtonSelector(): Locator {
+    return this.page.locator('button[type="submit"]');
+  }
+
+  get closeButtonSelector(): Locator {
+    return this.page.locator('.modal-close');
+  }
+
+  // Методы для работы с авторизацией
+  async openLoginModal(): Promise<void> {
+    this.logStep('Opening login modal');
+    await this.headerComponent.clickLoginButton();
+    await this.waitForVisible();
+    this.logSuccess('Login modal opened');
+  }
+
+  async openRegistrationModal(): Promise<void> {
+    this.logStep('Opening registration modal');
+    await this.headerComponent.clickRegistrationButton();
+    await this.waitForVisible();
+    this.logSuccess('Registration modal opened');
+  }
+
+  async loginWithEmail(email: string, password: string): Promise<void> {
+    this.logStep('Logging in with email');
+    await this.loginTabSelector.click();
+    await this.emailInputSelector.fill(email);
+    await this.passwordInputSelector.fill(password);
     await this.loginButtonSelector.click();
-    await this.page.waitForTimeout(2000);
-    this.logSuccess('Login form submitted');
+    this.logSuccess('Login with email completed');
   }
 
-  /**
-   * Восстановить пароль
-   */
-  async forgotPassword(): Promise<void> {
-    this.logStep('Initiating password recovery');
-    await this.forgotPasswordSelector.click();
-    this.logSuccess('Password recovery initiated');
+  async loginWithPhone(phone: string, password: string): Promise<void> {
+    this.logStep('Logging in with phone');
+    await this.loginTabSelector.click();
+    await this.phoneInputSelector.fill(phone);
+    await this.passwordInputSelector.fill(password);
+    await this.loginButtonSelector.click();
+    this.logSuccess('Login with phone completed');
   }
 
-  /**
-   * Проверить, заблокирована ли кнопка входа
-   */
-  async isLoginButtonDisabled(): Promise<boolean> {
-    return await this.loginButtonSelector.isDisabled();
+  async registerWithEmail(email: string, phone: string, password: string, confirmPassword: string): Promise<void> {
+    this.logStep('Registering with email');
+    await this.registrationTabSelector.click();
+    await this.emailRegistrationInputSelector.fill(email);
+    await this.phoneRegistrationInputSelector.fill(phone);
+    await this.passwordRegistrationInputSelector.fill(password);
+    await this.confirmPasswordInputSelector.fill(confirmPassword);
+    await this.registrationButtonSelector.click();
+    this.logSuccess('Registration with email completed');
   }
 
-  /**
-   * Очистить форму входа
-   */
-  async clearLoginForm(): Promise<void> {
-    this.logStep('Clearing login form');
-    await this.clearForm();
-    this.logSuccess('Login form cleared');
+  async closeModal(): Promise<void> {
+    this.logStep('Closing modal');
+    await this.closeButtonSelector.click();
+    this.logSuccess('Modal closed');
   }
 
-  /**
-   * Получить доступные социальные провайдеры
-   */
-  async getSocialProviders(): Promise<Array<{name: string, url: string, icon: string}>> {
-    const providers: Array<{name: string, url: string, icon: string}> = [];
-    const socialLinks = await this.page.locator('.social-link').all();
-    
-    for (const link of socialLinks) {
-      const href = await link.getAttribute('href');
-      const icon = await link.locator('img').getAttribute('src');
-      
-      if (href && icon) {
-        const providerName = href.includes('google') ? 'google' : 
-          href.includes('telegram') ? 'telegram' : 'unknown';
-        
-        providers.push({
-          name: providerName,
-          url: href,
-          icon: icon
-        });
-      }
-    }
-    
-    return providers;
+  async isModalVisible(): Promise<boolean> {
+    return await this.isVisible();
+  }
+
+  async waitForModalToClose(): Promise<void> {
+    await this.waitForHidden();
   }
 }
