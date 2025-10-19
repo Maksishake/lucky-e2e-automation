@@ -3,7 +3,7 @@
  */
 
 import { Page, Locator, expect } from '@playwright/test';
-import { BasePage } from '../core/base.page';
+import { BasePage } from '../../core/base.page';
 import { Routes } from '@config/routes';
 
 export class BonusPage extends BasePage {

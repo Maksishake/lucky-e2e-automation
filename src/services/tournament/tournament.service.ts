@@ -4,7 +4,7 @@
 
 import { Page } from '@playwright/test';
 import { BaseService } from '../../core/base.service';
-import { TournamentPage } from '../../pages/tournament.page';
+import { TournamentPage } from '../../components/pages/tournament.page';
 import { TournamentModalComponent } from '../../components/modals/tournament-modal';
 import { TournamentInfo, TournamentPageStats, TournamentFilters, TournamentSearchResult } from '../../types/tournament.types';
 

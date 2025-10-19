@@ -3,7 +3,7 @@
  */
 
 import { Locator, Page } from '@playwright/test';
-import { BasePage } from '../core/base.page';
+import { BasePage } from '../../core/base.page';
 
 export class TournamentPage extends BasePage {
   

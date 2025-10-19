@@ -3,11 +3,11 @@
  */
 
 import { Page } from '@playwright/test';
-import { BasePage } from '../core/base.page';
-import { BannerSliderComponent } from '../components/banner-slider.component';
-import { GameFilterComponent } from '../components/games/game-filter.component';
-import { GameGridComponent } from '../components/games/game-grid.component';
-import { GameFilterState, GameGridState } from '../types/game.types';
+import { BasePage } from '../../core/base.page';
+import { BannerSliderComponent } from '../banner-slider.component';
+import { GameFilterComponent } from '../games/game-filter.component';
+import { GameGridComponent } from '../games/game-grid.component';
+import { GameFilterState, GameGridState } from '../../types/game.types';
 
 export abstract class BaseGamePage extends BasePage {
   // Компоненты страницы
